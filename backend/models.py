@@ -18,6 +18,8 @@ class Building(models.Model):
     # Number of floors (Số lượng tầng)
     number_of_floors = models.PositiveSmallIntegerField("Số lượng tầng")
 
+    number_of_room_each_floor = models.PositiveSmallIntegerField("Số lượng phòng mỗi tầng", default=10)
+
     def __str__(self):
         return self.name
 

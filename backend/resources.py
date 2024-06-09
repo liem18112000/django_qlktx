@@ -10,7 +10,7 @@ class StudentResource(resources.ModelResource):
         model = Student
         store_instance = True
         import_id_fields = ("id",)
-        exclude = ("id",)
+        # exclude = ("id",)
         export_order = (
             "building",
             "room",
@@ -73,10 +73,16 @@ class StudentResource(resources.ModelResource):
     )
 
     def dehydrate_room(self, instance):
-        return instance.room.room_code
+        try:
+            return instance.room.room_code
+        except Exception as e:
+            return "N/A"
 
     def dehydrate_building(self, instance):
-        return instance.room.building.name
+        try:
+            return instance.room.building.name
+        except Exception as e:
+            return "N/A"
 
     def save_instance(self, instance, *args, **kwargs):
         room = str(getattr(instance, 'room_code', None))

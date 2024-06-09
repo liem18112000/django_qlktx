@@ -16,9 +16,10 @@ class BuildingAdmin(BaseAdmin):
         "name",
         "address",
         "number_of_floors",
+        "number_of_room_each_floor",
     )
 
-    list_filter = ("number_of_floors",)
+    list_filter = ("number_of_floors", "number_of_room_each_floor")
     search_fields = ("name", "address")
 
 
