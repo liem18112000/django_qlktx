@@ -58,7 +58,7 @@ class Student(models.Model):
     full_name = models.CharField("Họ và tên", max_length=255)
 
     # Gender of student
-    gender = models.TextField("Giới tính", max_length=4, choices=Gender.choices, default=Gender.MALE)
+    gender = models.TextField("Giới tính", max_length=4, choices=Gender.choices, default=Gender.FEMALE)
 
     # Platoon (Trung đội)
     platoon = models.CharField("Trung đội", max_length=50)

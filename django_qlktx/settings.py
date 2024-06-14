@@ -19,6 +19,7 @@ import structlog
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 os.makedirs(os.path.join(BASE_DIR, "logs"), exist_ok=True)
+os.makedirs(os.path.join(BASE_DIR, "media"), exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, "locale"), exist_ok=True)
 
@@ -246,7 +247,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STATIC_ROOT = os.path.join(BASE_DIR, "static")
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+MEDIA_URL = "/media/"
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -279,7 +284,7 @@ JAZZMIN_SETTINGS = {
     # Title on the brand (19 chars max) (defaults to current_admin_site.site_header if absent or None)
     "site_brand": "QLKTX",
     # Logo to use for your site, must be present in static files, used for brand on top left
-    # "site_logo": "../media/logo.png",
+    "site_logo": "../media/logo.png",
     # Logo to use for your site, must be present in static files, used for login form logo (defaults to site_logo)
     "login_logo": None,
     # Logo to use for login form in dark themes (defaults to login_logo)
@@ -326,7 +331,7 @@ JAZZMIN_SETTINGS = {
     # UI Tweaks #
     #############
     # Relative paths to custom CSS/JS scripts (must be present in static files)
-    "custom_css": None,
+    "custom_css": "../media/style.css",
     "custom_js": None,
     # Whether to link font from fonts.googleapis.com (use custom_css to supply font otherwise)
     "use_google_fonts_cdn": True,

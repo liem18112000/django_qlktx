@@ -116,7 +116,12 @@ class StudentResource(resources.ModelResource):
         available_rooms = Room.objects.filter(building__name=building, is_lock=False).all()
         for room in available_rooms:
             student_room = Student.objects.filter(room=room)
-            gender = student_room.first().gender
-            if room.capacity > Student.objects.filter(room=room).count() and gender == _gender:
-                return room
+            student_count = Student.objects.filter(room=room).count()
+            if student_count > 0:
+                gender = student_room.first().gender
+                if room.capacity > student_count and gender == _gender:
+                    return room
+            else:
+                if room.capacity > 0:
+                    return room
         raise Exception("Không còn phòng trong tòa nhà")
