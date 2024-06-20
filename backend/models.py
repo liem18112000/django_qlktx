@@ -20,6 +20,8 @@ class Building(models.Model):
 
     number_of_room_each_floor = models.PositiveSmallIntegerField("Số lượng phòng mỗi tầng", default=10)
 
+    priority = models.PositiveSmallIntegerField(default=0, verbose_name="Độ ưu tiên (dành cho xếp ưu tiên kí túc xá nữ)")
+
     def __str__(self):
         return self.name
 

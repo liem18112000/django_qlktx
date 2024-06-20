@@ -17,6 +17,8 @@ class BuildingAdmin(BaseAdmin):
         "address",
         "number_of_floors",
         "number_of_room_each_floor",
+        "priority",
+
     )
 
     list_filter = ("number_of_floors", "number_of_room_each_floor")
