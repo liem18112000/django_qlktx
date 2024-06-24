@@ -17,12 +17,24 @@ class BuildingAdmin(BaseAdmin):
         "address",
         "number_of_floors",
         "number_of_room_each_floor",
+        "capacity_each_room",
+        "get_reserved_count",
         "priority",
-
     )
 
-    list_filter = ("number_of_floors", "number_of_room_each_floor")
+    list_filter = ("number_of_floors", "number_of_room_each_floor", "capacity_each_room")
     search_fields = ("name", "address")
+
+    @admin.display(description='Số lượng chỗ đã sắp xếp')
+    def get_reserved_count(self, obj):
+        total = 0
+        student_count = 0
+        for room in Room.objects.filter(building=obj).all():
+            student_count += Student.objects.filter(room=room).count()
+            total += room.capacity
+        return f"{student_count}/{total}"
+
+    readonly_fields = ('get_reserved_count',)
 
 
 @admin.register(Room)

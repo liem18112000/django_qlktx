@@ -102,7 +102,11 @@ class StudentResource(resources.ModelResource):
                 instance.room = self._get_available_room(building, gender)
         else:
             has_room = False
-            for building in Building.objects.all():
+            buildings = Building.objects.all()
+            if gender == Gender.FEMALE:
+                buildings = buildings.order_by('-priority')
+
+            for building in buildings:
                 try:
                     instance.room = self._get_available_room(building, gender)
                     has_room = True

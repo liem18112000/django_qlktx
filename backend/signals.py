@@ -17,6 +17,7 @@ def building_post_save(sender, instance, created, **kwargs):
     if created:
         number_of_floors = instance.number_of_floors
         number_of_room_each_floor = instance.number_of_room_each_floor
+        capacity_each_room = instance.capacity_each_room
         if number_of_room_each_floor > 0 and number_of_floors > 0:
             for i in range(number_of_floors):
                 for j in range(number_of_room_each_floor):
@@ -24,6 +25,7 @@ def building_post_save(sender, instance, created, **kwargs):
                     Room.objects.create(
                         building=instance,
                         room_code=room_code,
-                        floor=i + 1
+                        floor=i + 1,
+                        capacity=capacity_each_room
                     )
 
