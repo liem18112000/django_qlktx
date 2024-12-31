@@ -52,6 +52,13 @@ for directory in required_dirs:
     except Exception as e:
         print(f"Failed to create directory {directory}: {e}")
 
+DEFAULT_SUPERUSER = {
+    "email": os.getenv("DEFAULT_SUPERUSER_EMAIL", "admin@gmail.com"),
+    "username": os.getenv("DEFAULT_SUPERUSER_USERNAME", "admin"),
+    "password": os.getenv("DEFAULT_SUPERUSER_PASSWORD", "admin"),
+    "phone_number": os.getenv("DEFAULT_SUPERUSER_PHONE_NUMBER", "0123456789"),
+}
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

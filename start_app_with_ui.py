@@ -1,12 +1,11 @@
 import os
 import socket
-import subprocess
 import sys
-import threading
 import webbrowser
 from multiprocessing import freeze_support, Process
 from tkinter import Tk, Label, Button, Entry, StringVar, messagebox
 from django.core.management import execute_from_command_line, call_command
+from django.contrib.auth import get_user_model
 
 
 def find_free_port(starting_port=8000):
@@ -20,24 +19,25 @@ def find_free_port(starting_port=8000):
             OSError(f"Port {port} is already in use.")  # Raise error if port is in use
 
 
-def run_django_command(command):
-    """Execute a Django management command using manage.py."""
-    try:
-        sys.argv = ["manage.py"] + command.split()
-        execute_from_command_line(sys.argv)
-        messagebox.showinfo("Success", f"Command '{command}' executed successfully.")
-    except Exception as e:
-        messagebox.showerror("Error", f"An error occurred: {e}")
+def create_default_superuser():
+    """Create a default superuser if it doesn't already exist."""
+    os.environ.setdefault("DJANGO_SUPERUSER_EMAIL", "admin@gmail.com")
+    os.environ.setdefault("DJANGO_SUPERUSER_PASSWORD", "admin")
+    os.environ.setdefault("DJANGO_SUPERUSER_USERNAME", "admin")
 
+    User = get_user_model()
 
-def run_command_action(command_var):
-    """Handler for the Run Command button."""
-    command = command_var.get().strip()
-    if not command:
-        messagebox.showwarning("Input Required", "Please enter a Django management command.")
-        return
-
-    threading.Thread(target=run_django_command, args=(command,), daemon=True).start()
+    # Ensure the superuser exists
+    if not User.objects.filter(is_superuser=True).exists():
+        print("Creating default superuser...")
+        User.objects.create_superuser(
+            email=os.environ["DJANGO_SUPERUSER_EMAIL"],
+            username=os.environ["DJANGO_SUPERUSER_USERNAME"],
+            password=os.environ["DJANGO_SUPERUSER_PASSWORD"],
+        )
+        print("Finish creating default superuser...")
+    else:
+        print("Default superuser already exists.")
 
 
 def start_django_server(port):
@@ -47,6 +47,9 @@ def start_django_server(port):
 
         # Apply migrations before starting the server
         call_command('migrate', interactive=False)
+
+        # Create a default superuser
+        create_default_superuser()
 
         # Prepare the arguments for running the server
         sys.argv = ["manage.py", "runserver", f"127.0.0.1:{port}", "--noreload"]
@@ -98,7 +101,7 @@ def create_ui():
     Entry(root, textvariable=command_var, width=50).pack(pady=5)
 
     # Button to run custom command
-    Button(root, text="Chạy câu lệnh", command=lambda: run_command_action(command_var), width=20).pack(pady=10)
+    Button(root, text="Chạy câu lệnh", command=lambda: run_django_command(command_var), width=20).pack(pady=10)
 
     # Quit Button
     Button(root, text="Thoát ra", command=root.quit, width=20, fg="red").pack(pady=10)
