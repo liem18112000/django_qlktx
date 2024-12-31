@@ -83,3 +83,4 @@ xlrd==2.0.1
 xlwt==1.3.0
 channels
 daphne
+pyinstaller~=6.11.1

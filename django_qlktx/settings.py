@@ -10,20 +10,48 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
 import structlog
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Determine the base directory
+if hasattr(sys, "_MEIPASS"):  # Running in a PyInstaller bundle
+    BASE_DIR = Path(sys._MEIPASS)
+    log_dir = BASE_DIR / 'logs'  # Logs directory in the temporary PyInstaller unpack path
+else:  # Running in a development environment
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    log_dir = BASE_DIR / 'dist' / 'logs'  # Logs directory inside the `dist` folder for development
 
-os.makedirs(os.path.join(BASE_DIR, "logs"), exist_ok=True)
-os.makedirs(os.path.join(BASE_DIR, "media"), exist_ok=True)
-os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
-os.makedirs(os.path.join(BASE_DIR, "locale"), exist_ok=True)
+if getattr(sys, 'frozen', True):  # Running as a PyInstaller bundle
+    exe_dir = Path(sys.executable).parent  # Get the directory of the executable
+    db_path = exe_dir / 'db.sqlite3'  # Set database near the executable
+else:  # Running in a development environment
+    BASE_DIR = Path(__file__).resolve().parent.parent  # Project root directory
+    db_path = BASE_DIR / 'db.sqlite3'  # Standard SQLite path for development
 
-# Application Logging
+# Define other directories relative to BASE_DIR
+media_dir = BASE_DIR / 'media'
+static_dir = BASE_DIR / 'static'
+locale_dir = BASE_DIR / 'locale'
+
+# Ensure necessary directories exist
+required_dirs = [
+    log_dir,  # Logs directory
+    media_dir,  # Media files
+    static_dir,  # Static files
+    locale_dir,  # Translations
+]
+
+# Create all required directories if they don't exist
+for directory in required_dirs:
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        print(f"Directory created or already exists: {directory}")
+    except Exception as e:
+        print(f"Failed to create directory {directory}: {e}")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -84,8 +112,6 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 
-
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
@@ -96,7 +122,6 @@ SECRET_KEY = "django-insecure-dl$vq_nbjeetr5p20jg7g$458an_(sm&j!2h+ccfz6pw1%5a@e
 DEBUG = True
 
 ALLOWED_HOSTS = []
-
 
 # Application definition
 
@@ -195,17 +220,15 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "django_qlktx.wsgi.application"
 
-
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": db_path,
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
@@ -225,7 +248,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
 
@@ -243,7 +265,6 @@ USE_L10N = True
 
 USE_TZ = True
 
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
@@ -251,7 +272,6 @@ STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "static")
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 MEDIA_URL = "/media/"
-
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -274,7 +294,6 @@ LOG_VIEWER_EXCLUDE_TEXT_PATTERN = (
 
 # Optionally you can set the next variables in order to customize the admin:
 LOG_VIEWER_FILE_LIST_TITLE = "Logging"
-
 
 JAZZMIN_SETTINGS = {
     # title of the window (Will default to current_admin_site.site_title if absent or None)
