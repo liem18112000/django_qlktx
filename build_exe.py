@@ -2,16 +2,16 @@ import os
 import PyInstaller.__main__
 import django
 
-# Paths
-BASE_DIR = os.path.abspath("D:/django/django_qlktx/django_qlktx")
-venv_path = os.path.abspath("D:/django/django_qlktx/venv/Lib/site-packages")
+#
+APP_PATH = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.join(APP_PATH, "django_qlktx")
+venv_path = os.path.join(APP_PATH, "venv/Lib/site-packages")
 
 print("Django initialized successfully!")
 
 # Include files and directories
 include_files = [
     "manage.py",
-    "start_app.py",
     "templates/",
     "static/",
     "media/",
@@ -81,9 +81,9 @@ pyinstaller_args = \
                 "--onefile",
                 "--console",
                 "--clean",
-                f"--add-data=D:/django/django_qlktx/django_qlktx/settings.py;django_qlktx",
+                f"--add-data={BASE_DIR}/settings.py;django_qlktx",
                 "start_app_with_ui.py",
-                "--name=YourDjangoApp",
+                "--name=QLKTX",
                 f"--runtime-hook={BASE_DIR}/hook-django.py",
                 # f"--hidden-import={venv_path}",
                 '--hidden-import=structlog',  # Make sure structlog is included
