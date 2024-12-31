@@ -95,13 +95,13 @@ def create_ui():
     # Button to directly run the Django server
     Button(root, text="Chạy ứng dụng", command=run_server_action, width=20).pack(pady=10)
 
-    # Entry for custom command
-    command_var = StringVar()
-    Label(root, text="Nhập câu lệnh").pack(pady=5)
-    Entry(root, textvariable=command_var, width=50).pack(pady=5)
-
-    # Button to run custom command
-    Button(root, text="Chạy câu lệnh", command=lambda: run_django_command(command_var), width=20).pack(pady=10)
+    # # Entry for custom command
+    # command_var = StringVar()
+    # Label(root, text="Nhập câu lệnh").pack(pady=5)
+    # Entry(root, textvariable=command_var, width=50).pack(pady=5)
+    #
+    # # Button to run custom command
+    # Button(root, text="Chạy câu lệnh", command=lambda: run_django_command(command_var), width=20).pack(pady=10)
 
     # Quit Button
     Button(root, text="Thoát ra", command=root.quit, width=20, fg="red").pack(pady=10)
