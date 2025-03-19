@@ -1,10 +1,8 @@
 from io import BytesIO
 
 import openpyxl
-from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
 from django.http import JsonResponse, HttpResponse
-from django.shortcuts import render
 from openpyxl.styles import Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
 

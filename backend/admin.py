@@ -245,8 +245,10 @@ class StudentAdmin(BaseAdmin):
 
         for student in queryset:
             student_gender = student.gender.strip().lower()
-            gender_assignment_1 = gender_1 and student_gender == gender_1.strip().lower() and building_1 and floor_number_1
-            gender_assignment_2 = gender_2 and student_gender == gender_2.strip().lower() and building_2 and floor_number_2
+            gender_assignment_1 = (gender_1 and student_gender == gender_1.strip().lower() and building_1 and
+                                   floor_number_1)
+            gender_assignment_2 = (gender_2 and student_gender == gender_2.strip().lower() and building_2 and
+                                   floor_number_2)
 
             if general_building and general_floor_number:
                 RoomAssignmentHelper.assign_room_by_building_and_floor(student, general_building, general_floor_number,
@@ -262,6 +264,8 @@ class StudentAdmin(BaseAdmin):
                 RoomAssignmentHelper.assign_room_by_priority(student, **flags)
 
             student.save()
+
+        RoomAssignmentHelper.merge_students_before_saving()
 
         self.message_user(request, f"{queryset.count()} học viên đã được sắp xếp phòng.")
 
@@ -312,7 +316,7 @@ class CustomUserAdmin(UserAdmin):
         ("Thông tin cá nhân", {"fields": ("first_name", "last_name", "email", "role")}),
         ("Các quyền", {
             "fields": ("is_active", "is_staff", "is_superuser", ("groups", "user_permissions")),
-            "classes": ("collapse", "wide", "custom-permissions-class"),  # ✅ Add classes here
+            "classes": ("collapse", "wide", "custom-permissions-class"),  # Add classes here
         }),
         ("Quản lý", {"fields": ("platoon", "floors", "buildings")}),
     )
@@ -388,7 +392,7 @@ class CustomAdminSite(admin.AdminSite):
                 occupied_count += Student.objects.filter(room=room).count()
             unoccupied_count = all_space_count - occupied_count
             item = {
-                "id": index,
+                "id": index + 1,
                 "name": building.name,
                 "room_count": room_count,
                 "all_space_count": all_space_count,
@@ -414,7 +418,7 @@ custom_admin_site = CustomAdminSite(name="custom_admin")
 
 # Copy all existing model registrations from admin.site to custom_admin_site
 for model, model_admin in admin.site._registry.items():
-    if model not in custom_admin_site._registry:  # ✅ Prevent duplicate registration
+    if model not in custom_admin_site._registry:  # Prevent duplicate registration
         custom_admin_site.register(model, model_admin.__class__)  # Keep existing admin settings
 
 # Ensure Django uses the custom admin site

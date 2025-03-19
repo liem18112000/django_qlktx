@@ -7,4 +7,4 @@ class BackendConfig(AppConfig):
     verbose_name = "Quản lý Ký túc xá"
 
     def ready(self):
-        import backend.signals
+        pass

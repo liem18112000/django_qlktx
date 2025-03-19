@@ -2,14 +2,13 @@ from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.db import models
 
 from backend.constants import Gender
-from phonenumber_field.modelfields import PhoneNumberField
 
 
 # Create your models here.
 class Building(models.Model):
     class Meta:
         verbose_name = "Tòa nhà"
-        verbose_name_plural = "Các tòa nhà"
+        verbose_name_plural = "Tòa nhà"
 
     # Building name (Tên tòa nhà)
     name = models.CharField("Tên tòa nhà", max_length=255)
@@ -34,7 +33,7 @@ class Building(models.Model):
 class Room(models.Model):
     class Meta:
         verbose_name = "Phòng"
-        verbose_name_plural = "Các phòng"
+        verbose_name_plural = "Phòng"
         unique_together = (("building", "room_code"),)
 
     # Building name (Tòa nhà)

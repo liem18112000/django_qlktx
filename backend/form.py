@@ -1,9 +1,9 @@
 from django import forms
+from django.utils.translation import gettext_lazy as _
 from django_admin_action_forms import AdminActionForm
 from import_export.forms import ExportForm, ImportForm
-from django.utils.translation import gettext_lazy as _
 
-from backend.models import Room, Building, Student, Floor
+from backend.models import Room, Building, Floor
 
 
 class StudentExportForm(ExportForm):

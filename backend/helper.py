@@ -1,5 +1,7 @@
-from django.core.exceptions import ObjectDoesNotExist
+import logging
+
 from django.db import models
+from django.db.models import Count, F
 
 from .models import Room, Student, Building, Floor, Platoon
 
@@ -237,3 +239,52 @@ class RoomAssignmentHelper:
 
         return room  # ✅ Return the assigned room
 
+    @staticmethod
+    def merge_students_before_saving(*args, **kwargs):
+        try:
+            # ✅ Find rooms that are under-occupied (not full but have students)
+            under_occupied_rooms = (
+                Room.objects.annotate(student_count=Count("student"))  # Count related students
+                .filter(student_count__gt=0, student_count__lt=F("capacity"))  # Not empty, not full
+                .order_by("room_code")  # Order by room_code
+            )
+
+            # ✅ Convert rooms to list for processing
+            target_rooms = list(under_occupied_rooms)
+
+            # ✅ Get students from under-occupied rooms
+            students_to_move = list(Student.objects.filter(room__in=under_occupied_rooms).order_by("id"))
+
+            # ✅ Track students that need updating
+            students_to_update = []
+
+            # ✅ Start merging students while respecting platoon alignment
+            for room in target_rooms:
+                available_slots = room.capacity - room.student_count  # How many students can fit?
+
+                # ✅ Get the first student in the room
+                first_student = Student.objects.filter(room=room).first()
+                if not first_student:
+                    continue  # Skip if no students in the room
+
+                room_platoon = first_student.platoon
+                room_gender = first_student.gender
+
+                # ✅ Move students from under-occupied rooms, but only if they match the platoon and gender
+                filtered_students = [s for s in students_to_move if
+                                     s.platoon == room_platoon and s.gender == room_gender]
+
+                while available_slots > 0 and filtered_students:
+                    student = filtered_students.pop(0)  # Take the first matching student
+                    student.room = room  # Move student to the new room
+                    students_to_update.append(student)  # Add student to update list
+                    students_to_move.remove(student)  # Remove from global list
+                    available_slots -= 1  # Reduce available slots
+
+            # ✅ Bulk update all moved students at once for efficiency
+            if students_to_update:
+                Student.objects.bulk_update(students_to_update, ["room"])
+
+        except Exception as e:
+            logging.error(f"error in merging: {e}")
+            return

@@ -1,16 +1,11 @@
 import logging
-import re
 from collections import defaultdict
 from sqlite3 import IntegrityError
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import models, transaction
-from django.db.models import QuerySet, Count, F, OuterRef, Subquery
+from django.db.models import QuerySet, Count, F
 from import_export import fields, resources
-from import_export.widgets import ForeignKeyWidget
-from phonenumber_field.phonenumber import PhoneNumber
 
-from backend.constants import Gender
 from backend.helper import RoomAssignmentHelper
 from backend.models import Student, Room, Building, Platoon
 
@@ -62,8 +57,8 @@ class StudentResource(BaseResource):
         self.fill_empty_first = None
         self.new_squad = defaultdict(list)  # Temporary storage for batch processing
         self.instances_to_save = []  # Store instances here
-        self.processed_instances = 0  # ✅ Track how many instances have been processed
-        self.total_instances = 0  # ✅ Track total students in the import
+        self.processed_instances = 0  # Track how many instances have been processed
+        self.total_instances = 0  # Track total students in the import
 
     class Meta:
         model = Student
@@ -184,9 +179,14 @@ class StudentResource(BaseResource):
         self.fill_empty_first = bool(kwargs.get("fill_empty_first", False))
         self.fill_partial_first = bool(kwargs.get("fill_partial_first", True))
         if self.total_instances == 0:
-            self.total_instances = len(dataset)  # ✅ Get total number of students
+            self.total_instances = len(dataset)  # Get total number of students
         print(self.total_instances)
 
+        if dry_run:  # Apply merging before confirmation
+            condition_for_partial = self.fill_partial_first is not None and self.fill_partial_first is not False
+            if self.processed_instances == self.total_instances and condition_for_partial:
+                print("Applying merging before confirmation page...")
+                self.merge_students_before_saving()
     # rules:
     # Assign rooms based on priority:
     # From lower floor to higher floor
@@ -194,39 +194,40 @@ class StudentResource(BaseResource):
     # Same gender in the same room
     # Same platoon/squad in the same room
 
-    def save_instance(self, instance, *args, **kwargs):
+    def save_instance(self, instance, *args, **kwargs,):
         self.assign_student_room(instance)
 
         super().save_instance(instance, *args, **kwargs)
         self.processed_instances += 1
 
-        # ✅ If this is the last student, run merging logic first
-        if self.processed_instances == self.total_instances:
+        # If this is the last student, run merging logic first
+        condition_for_partial = self.fill_partial_first is not None and self.fill_partial_first is not False
+        if self.processed_instances == self.total_instances and condition_for_partial:
             self.merge_students_before_saving()
 
-    def merge_students_before_saving(self):
+    def merge_students_before_saving(self, fill_partial_first, *args, **kwargs, ):
         try:
-            # ✅ Find rooms that are under-occupied (not full but have students)
+            #  Find rooms that are under-occupied (not full but have students)
             under_occupied_rooms = (
                 Room.objects.annotate(student_count=Count("student"))  # Count related students
                 .filter(student_count__gt=0, student_count__lt=F("capacity"))  # Not empty, not full
                 .order_by("room_code")  # Order by room_code
             )
 
-            # ✅ Convert rooms to list for processing
+            # Convert rooms to list for processing
             target_rooms = list(under_occupied_rooms)
 
-            # ✅ Get students from under-occupied rooms
+            #  Get students from under-occupied rooms
             students_to_move = list(Student.objects.filter(room__in=under_occupied_rooms).order_by("id"))
 
-            # ✅ Track students that need updating
+            #  Track students that need updating
             students_to_update = []
 
-            # ✅ Start merging students while respecting platoon alignment
+            #  Start merging students while respecting platoon alignment
             for room in target_rooms:
                 available_slots = room.capacity - room.student_count  # How many students can fit?
 
-                # ✅ Get the first student in the room
+                # Get the first student in the room
                 first_student = Student.objects.filter(room=room).first()
                 if not first_student:
                     continue  # Skip if no students in the room
@@ -234,7 +235,7 @@ class StudentResource(BaseResource):
                 room_platoon = first_student.platoon
                 room_gender = first_student.gender
 
-                # ✅ Move students from under-occupied rooms, but only if they match the platoon and gender
+                #  Move students from under-occupied rooms, but only if they match the platoon and gender
                 filtered_students = [s for s in students_to_move if
                                      s.platoon == room_platoon and s.gender == room_gender]
 
@@ -245,7 +246,7 @@ class StudentResource(BaseResource):
                     students_to_move.remove(student)  # Remove from global list
                     available_slots -= 1  # Reduce available slots
 
-            # ✅ Bulk update all moved students at once for efficiency
+            #  Bulk update all moved students at once for efficiency
             if students_to_update:
                 Student.objects.bulk_update(students_to_update, ["room"])
 
@@ -263,12 +264,12 @@ class StudentResource(BaseResource):
         # Get flags
         flags = self._get_strategy_flags()
 
-        # ✅ Step 1: Select the best strategy
+        #  Step 1: Select the best strategy
         strategy_method, strategy_args, strategy_kwargs = self._select_strategy(
             instance, building, room_code, selected_building_name, gender, platoon, squad, **flags
         )
 
-        # ✅ Step 2: Execute the chosen strategy
+        #  Step 2: Execute the chosen strategy
         strategy_method(instance, *strategy_args, **strategy_kwargs)
 
     def _get_selected_building_name(self):
