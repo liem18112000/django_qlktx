@@ -375,8 +375,37 @@ class CustomAdminSite(admin.AdminSite):
 
     def index(self, request, extra_context=None):
         extra_context = extra_context or {}
-        extra_context["buildings"] = Building.objects.all()
+        buildings = Building.objects.all()
+        data = []
+        total_room = 0
+        total_space = 0
+        occupied_space = 0
+        for index, building in enumerate(buildings):
+            room_count = building.number_of_room_each_floor * building.number_of_floors
+            all_space_count = room_count * building.capacity_each_room
+            occupied_count = 0
+            for room in Room.objects.filter(building=building).all():
+                occupied_count += Student.objects.filter(room=room).count()
+            unoccupied_count = all_space_count - occupied_count
+            item = {
+                "id": index,
+                "name": building.name,
+                "room_count": room_count,
+                "all_space_count": all_space_count,
+                "occupied_count": occupied_count,
+                "unoccupied_count": unoccupied_count,
+                "note": ""
+            }
+            total_room = total_room + room_count
+            total_space = total_space + all_space_count
+            occupied_space = occupied_space + occupied_count
+            data.append(item)
 
+        extra_context["data"] = data
+        extra_context["total_room"] = total_room
+        extra_context["total_space"] = total_space
+        extra_context["occupied_space"] = occupied_space
+        extra_context["unoccupied_space"] = total_space - occupied_space
         return super().index(request, extra_context=extra_context)
 
 

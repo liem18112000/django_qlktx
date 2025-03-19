@@ -1,31 +1,46 @@
 {% extends "admin/index.html" %}
 
 {% block content %}
-{#    <div class="card col-sm-12 col-lg-12 col-md-12 p-0">#}
-{#        <div class="card-header bg-primary text-white">#}
-{#            <h3 class="card-title">Custom Dashboard Table</h3>#}
-{#        </div>#}
-{#        <div class="card-body">#}
-{#            <table id="customTable" class="table table-striped table-bordered table-hover dataTable">#}
-{#                <thead class="bg-white text-primary">#}
-{#                    <tr>#}
-{#                        <th>ID</th>#}
-{#                        <th>Name</th>#}
-{#                        <th>Created At</th>#}
-{#                    </tr>#}
-{#                </thead>#}
-{#                <tbody>#}
-{#                    {% for obj in buildings %}#}
-{#                    <tr class="{% cycle 'table-light' 'table-secondary' %}">#}
-{#                        <td>{{ obj.id }}</td>#}
-{#                        <td>{{ obj.name }}</td>#}
-{#                        <td>{{ obj.created_at }}</td>#}
-{#                    </tr>#}
-{#                    {% endfor %}#}
-{#                </tbody>#}
-{#            </table>#}
-{#        </div>#}
-{#    </div>#}
+    <div class="card col-sm-12 col-lg-12 col-md-12 p-0">
+        <div class="card-body">
+            <table id="customTable" class="table table-striped table-bordered table-hover dataTable">
+                <thead class="bg-white text-primary text-center">
+                    <tr>
+                        <th>TT</th>
+                        <th>Ký túc xá</th>
+                        <th>Số phòng</th>
+                        <th>Tổng số chỗ</th>
+                        <th>Số chỗ đã bố trí</th>
+                        <th>Số chỗ chưa bố trí</th>
+                        <th>Ghi chú</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for obj in data %}
+                    <tr class="text-center">
+                        <td>{{ obj.id }}</td>
+                        <td>{{ obj.name }}</td>
+                        <td>{{ obj.room_count }}</td>
+                        <td>{{ obj.all_space_count }}</td>
+                        <td>{{ obj.occupied_count }}</td>
+                        <td>{{ obj.unoccupied_count }}</td>
+                        <td>{{ obj.note }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="text-center text-bold">
+                    <tr>
+                        <td colspan="2">Tổng cộng</td>
+                        <td colspan="1">{{ total_room }}</td>
+                        <td colspan="1">{{ total_space }}</td>
+                        <td colspan="1">{{ occupied_space }}</td>
+                        <td colspan="1">{{ unoccupied_space }}</td>
+                        <td colspan="1"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
 
     {{ block.super }}  {# Keeps the default Django admin links #}
 
