@@ -22,9 +22,13 @@ from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
 
+from backend.views import get_floors, export_rooms_buildings
+
 urlpatterns = (
         [
             path("logs/", include("log_viewer.urls")),
+            path("admin/get_floors/", get_floors, name="get_floors"),
+            path("admin/export-rooms-buildings/", export_rooms_buildings, name="export_rooms_buildings"),
             path("i18n/", include("django.conf.urls.i18n")),
             path("api/v1/token", TokenObtainPairView.as_view(), name="token_obtain_pair"),
             path("api/v1/token/refresh", TokenRefreshView.as_view(), name="token_refresh"),
@@ -45,4 +49,8 @@ urlpatterns = (
         + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 )
 
-urlpatterns += i18n_patterns(path("admin/", admin.site.urls))
+urlpatterns += i18n_patterns(
+        path("admin/backend/student/", include("django_admin_action_forms.urls")),
+        path("admin/", admin.site.urls),
+
+)

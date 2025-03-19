@@ -2,6 +2,7 @@ import os
 import PyInstaller.__main__
 import django
 
+
 #
 APP_PATH = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.join(APP_PATH, "django_qlktx")
@@ -14,11 +15,14 @@ include_files = [
     "manage.py",
     "templates/",
     "static/",
+    "staticfiles/",
     "media/",
     "core/",
     "django_qlktx/",
     "backend/",
-    "locale/"
+    "locale/",
+    "venv/",
+    "venv/Lib/site-packages/django_admin_action_forms/",
 ]
 
 # Construct additional data arguments
@@ -32,14 +36,6 @@ hidden_imports = []
 hidden_imports.extend([
 
 ])
-
-# requirements_file = "requirements.txt"
-# if os.path.exists(requirements_file):
-#     with open(requirements_file, "r") as f:
-#         for line in f:
-#             package = line.split("==")[0].strip()
-#             if package and not package.startswith("#"):
-#                 hidden_imports.append(package)
 
 # Extract libraries from requirements.txt
 requirements_file = "requirements.txt"
@@ -68,7 +64,10 @@ collect_all_args.extend([
     "django-filter",
     "health_check",
     "import_export",
-    "rest_framework_simplejwt"
+    "rest_framework_simplejwt",
+    "django-admin-action-forms",
+    "phonenumber_field",
+    "setuptools_scm",
 ])
 
 # Generate --collect-all arguments dynamically
@@ -77,7 +76,6 @@ collect_all_args = [f"--collect-all={imp}" for imp in collect_all_args]
 pyinstaller_args = \
     (
             [
-                # "--onedir",
                 "--onefile",
                 "--console",
                 "--clean",
@@ -86,7 +84,11 @@ pyinstaller_args = \
                 "--name=QLKTX",
                 f"--runtime-hook={BASE_DIR}/hook-django.py",
                 # f"--hidden-import={venv_path}",
-                '--hidden-import=structlog',  # Make sure structlog is included
+                '--hidden-import=structlog',
+                '--hidden-import=phonenumber_field',
+                '--hidden-import=django_admin_action_forms',
+                '--hidden-import=setuptools_scm',
+
                 # "--debug=all"
 
             ] + add_data_args + [f"--hidden-import={imp}" for imp in hidden_imports] + collect_all_args

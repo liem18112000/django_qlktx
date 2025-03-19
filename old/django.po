@@ -1,0 +1,145 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-02-26 21:06+0700\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+#: .\venv\Lib\site-packages\import_export\admin.py:244
+#, python-format
+msgid "%s through import_export"
+msgstr ""
+
+#: .\venv\Lib\site-packages\import_export\admin.py:252
+msgid "Import finished, with {} new and {} updated {}."
+msgstr ""
+
+#: .\venv\Lib\site-packages\import_export\admin.py:497
+#, python-format
+msgid ""
+"%(exc_name)s encountered while trying to read file. Ensure you have chosen "
+"the correct format for the file."
+msgstr ""
+
+#: .\venv\Lib\site-packages\import_export\admin.py:648
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\change_list_import_item.html:5
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:19
+msgid "Import"
+msgstr "Nhập liệu"
+
+#: .\venv\Lib\site-packages\import_export\admin.py:850
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\change_list_export_item.html:5
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\export.html:12
+msgid "Export"
+msgstr "Xuất liệu"
+
+#: .\venv\Lib\site-packages\import_export\admin.py:927
+msgid "You must select an export format."
+msgstr "Bạn phải chọn định dạng cần xuất liệu"
+
+#: .\venv\Lib\site-packages\import_export\admin.py:952
+#, python-format
+msgid "Export selected %(verbose_name_plural)s"
+msgstr "Xuất liệu cho %(verbose_name_plural)s"
+
+#: .\venv\Lib\site-packages\import_export\forms.py:12
+msgid "Resource"
+msgstr ""
+
+#: .\venv\Lib\site-packages\import_export\forms.py:40
+msgid "File to import"
+msgstr "Tệp tin cần xuất liệu"
+
+#: .\venv\Lib\site-packages\import_export\forms.py:42
+#: .\venv\Lib\site-packages\import_export\forms.py:83
+#: .\venv\Lib\site-packages\import_export\forms.py:116
+msgid "Format"
+msgstr "Định dạng"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\base.html:11
+msgid "Home"
+msgstr "Trang chủ"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\export.html:38
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:65
+msgid "Submit"
+msgstr "Thưc hiện"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:30
+msgid ""
+"Below is a preview of data to be imported. If you are satisfied with the "
+"results, click 'Confirm import'"
+msgstr ""
+"Phía dưới là bản xem trước của dữ liệu để nhập liệu. nếu bạn hài lòng với"
+"kết quả, nhấn 'Xác nhận nhập liệu'"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:33
+msgid "Confirm import"
+msgstr "Xác nhận nhập liệu"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:76
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:107
+msgid "Errors"
+msgstr ""
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:87
+msgid "Line number"
+msgstr ""
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:99
+msgid "Some rows failed to validate"
+msgstr ""
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:101
+msgid ""
+"Please correct these errors in your data where possible, then reupload it "
+"using the form above."
+msgstr ""
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:106
+msgid "Row"
+msgstr ""
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:133
+msgid "Non field specific"
+msgstr ""
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:156
+msgid "Preview"
+msgstr "Bản xem trước"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:171
+msgid "New"
+msgstr "Mới"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:173
+msgid "Skipped"
+msgstr "Đã bỏ qua"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:175
+msgid "Delete"
+msgstr "Xóa"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\import.html:177
+msgid "Update"
+msgstr "Thay đổi"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\resource_fields_list.html:5
+msgid "This exporter will export the following fields: "
+msgstr "Tệp tin sẽ được xuất liệu theo các ô như sau:"
+
+#: .\venv\Lib\site-packages\import_export\templates\admin\import_export\resource_fields_list.html:7
+msgid "This importer will import the following fields: "
+msgstr "Tệp tin sẽ được nhập liệu theo các ô như sau:"

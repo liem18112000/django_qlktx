@@ -24,15 +24,15 @@ msgstr ""
 
 #: .\templates\admin\base.html:171
 msgid "Account"
-msgstr ""
+msgstr "Tài khoaản"
 
 #: .\templates\admin\base.html:174
 msgid "Change password"
-msgstr ""
+msgstr "Thay đổi mật khẩu"
 
 #: .\templates\admin\base.html:185
 msgid "Log out"
-msgstr ""
+msgstr "Đăng xất"
 
 #: .\templates\admin\base.html:198
 msgid "See Profile"
@@ -64,7 +64,7 @@ msgstr ""
 
 #: .\templates\admin\base.html:378
 msgid "Close"
-msgstr ""
+msgstr "Đóng"
 
 #: .\templates\admin\login.html:15
 #, python-format
@@ -79,7 +79,7 @@ msgstr ""
 
 #: .\templates\admin\login.html:71
 msgid "Log in"
-msgstr ""
+msgstr "Đăng nhập"
 
 #: .\venv\Lib\site-packages\django\contrib\messages\apps.py:16
 msgid "Messages"
@@ -1294,3 +1294,11 @@ msgstr ""
 #: .\venv\Lib\site-packages\django\views\templates\default_urlconf.html:248
 msgid "Connect, get help, or contribute"
 msgstr ""
+
+#: .\venv\Lib\site-packages\django\contrib\auth\models.py:360
+msgid "staff status"
+msgstr "tình trạng tài khoản thường"
+
+#: .\venv\Lib\site-packages\django\contrib\auth\models.py:249
+msgid "superuser status"
+msgstr "trạng thái tài khoản toàn quyền"

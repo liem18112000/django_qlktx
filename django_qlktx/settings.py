@@ -19,22 +19,25 @@ import structlog
 # Determine the base directory
 if hasattr(sys, "_MEIPASS"):  # Running in a PyInstaller bundle
     BASE_DIR = Path(sys._MEIPASS)
-    log_dir = BASE_DIR / 'logs'  # Logs directory in the temporary PyInstaller unpack path
 else:  # Running in a development environment
     BASE_DIR = Path(__file__).resolve().parent.parent
     log_dir = BASE_DIR / 'dist' / 'logs'  # Logs directory inside the `dist` folder for development
 
-if getattr(sys, 'frozen', True):  # Running as a PyInstaller bundle
+if getattr(sys, 'frozen', False):  # Correct check
     exe_dir = Path(sys.executable).parent  # Get the directory of the executable
+    log_dir = exe_dir / 'logs'  # Create logs in EXE's folder
     db_path = exe_dir / 'db.sqlite3'  # Set database near the executable
 else:  # Running in a development environment
     BASE_DIR = Path(__file__).resolve().parent.parent  # Project root directory
+    log_dir = BASE_DIR / 'dist' / 'logs'  # Logs for development
     db_path = BASE_DIR / 'db.sqlite3'  # Standard SQLite path for development
 
 # Define other directories relative to BASE_DIR
 media_dir = BASE_DIR / 'media'
 static_dir = BASE_DIR / 'static'
 locale_dir = BASE_DIR / 'locale'
+template_dir = BASE_DIR / 'templates'
+static_files_dir = BASE_DIR / 'staticfiles'
 
 # Ensure necessary directories exist
 required_dirs = [
@@ -42,6 +45,8 @@ required_dirs = [
     media_dir,  # Media files
     static_dir,  # Static files
     locale_dir,  # Translations
+    template_dir,
+    static_files_dir
 ]
 
 # Create all required directories if they don't exist
@@ -57,6 +62,7 @@ DEFAULT_SUPERUSER = {
     "username": os.getenv("DEFAULT_SUPERUSER_USERNAME", "admin"),
     "password": os.getenv("DEFAULT_SUPERUSER_PASSWORD", "admin"),
     "phone_number": os.getenv("DEFAULT_SUPERUSER_PHONE_NUMBER", "0123456789"),
+    "role": os.getenv("DEFAULT_SUPERUSER_ROLE", "Admin")
 }
 
 LOGGING = {
@@ -164,6 +170,8 @@ INSTALLED_APPS = [
     "health_check.contrib.psutil",
     # Import export
     "import_export",
+    # Admin action form
+    'django_admin_action_forms',
 ]
 
 MIDDLEWARE = [
@@ -262,7 +270,9 @@ LANGUAGE_CODE = "en-us"
 
 LANGUAGES = [("en", "English"), ("vi", "Vietnam")]
 
-LOCALE_PATHS = [os.path.join(BASE_DIR, "locale")]
+LOCALE_PATHS = [
+    os.path.join(BASE_DIR, "locale"),  # Ensure your project has this folder
+]
 
 TIME_ZONE = "Asia/Bangkok"
 
@@ -275,10 +285,20 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
+# Static Files (CSS, JS, images)
 STATIC_URL = "/static/"
-STATIC_ROOT = os.path.join(BASE_DIR, "static")
-MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+# Keep app-level static files in a separate directory
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),  # Development static files
+]
+
+# Collect all static files into "staticfiles" during deployment
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+
+# Media Files (User uploads)
 MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -299,10 +319,11 @@ LOG_VIEWER_EXCLUDE_TEXT_PATTERN = (
     None  # String regex expression to exclude the log from line
 )
 
-# Optionally you can set the next variables in order to customize the admin:
+# Optionally, you can set the next variables to customize the admin:
 LOG_VIEWER_FILE_LIST_TITLE = "Logging"
 
 JAZZMIN_SETTINGS = {
+
     # title of the window (Will default to current_admin_site.site_title if absent or None)
     "site_title": "Quản lý Ký Túc Xá",
     # Title on the login screen (19 chars max) (defaults to current_admin_site.site_header if absent or None)
@@ -317,7 +338,7 @@ JAZZMIN_SETTINGS = {
     "login_logo_dark": None,
     # CSS classes that are applied to the logo above
     "site_logo_classes": "img-circle",
-    # Relative path to a favicon for your site, will default to site_logo if absent (ideally 32x32 px)
+    # The Relative path to a favicon for your site will default to site_logo if absent (ideally 32x32 px)
     "site_icon": None,
     # Welcome text on the login screen
     "welcome_sign": "Hệ thống Quản lý Ký Túc Xá",
@@ -325,7 +346,11 @@ JAZZMIN_SETTINGS = {
     "copyright": "QLKTX System Ltd",
     # List of model admins to search from the search bar, search bar omitted if excluded
     # If you want to use a single search field you dont need to use a list, you can use a simple string
-    "search_model": ["backend.Student", "backend.Room", "backend.Building"],
+    "search_model": ["backend.Building", "backend.Room", "backend.Student"],
+
+    "topmenu_links": [
+        {"name": "Xuất liệu báo cáo", "url": "/admin/export-rooms-buildings/"},
+    ],
     # Field name on user model that contains avatar ImageField/URLField/Charfield or a callable that receives the user
     "user_avatar": None,
     #############
@@ -335,6 +360,14 @@ JAZZMIN_SETTINGS = {
     "show_sidebar": True,
     # Whether to aut expand the menu
     "navigation_expanded": True,
+
+    "order_with_respect_to": [
+        "backend.building",
+        "backend.room",
+        "backend.student",
+        "backend.platoon",
+        "backend.customuser"
+    ],
     # for the full list of 5.13.0 free icon classes
     "icons": {
         "auth": "fas fa-users-cog",
@@ -357,12 +390,15 @@ JAZZMIN_SETTINGS = {
     # UI Tweaks #
     #############
     # Relative paths to custom CSS/JS scripts (must be present in static files)
-    "custom_css": "../media/style.css",
-    "custom_js": None,
+    "custom_css": "../media/style.css", "../static/django_admin_action_forms/css/action_form.css"
+                                        "custom_js": None,
     # Whether to link font from fonts.googleapis.com (use custom_css to supply font otherwise)
     "use_google_fonts_cdn": True,
     # Whether to show the UI customizer on the sidebar
     "show_ui_builder": True,
     # Add a language dropdown into the admin
     "language_chooser": True,
+
 }
+
+AUTH_USER_MODEL = "backend.CustomUser"

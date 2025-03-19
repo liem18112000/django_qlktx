@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+    <h1>403—Access Denied</h1>
+    <p>{{ message|default:"You do not have permission to access this page." }}</p>
+    <a href="{% url 'admin:index' %}">Go Back to Admin</a>
+{% endblock %}

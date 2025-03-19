@@ -1,0 +1,53 @@
+:root {
+    --white: white;
+    --blue: #4582ECFF;
+    --blue-hover: #2780E3FF;
+
+    --action-form-button-fg: var(--white);
+    --action-form-button-hover-fg: var(--white);
+
+    --action-form-button-bg: var(--blue);
+    --action-form-button-hover-bg: var(--blue-hover);
+
+    --action-form-close-button-bg: var(--close-button-bg);
+    --action-form-close-button-hover-bg: var(--close-button-hover-bg);
+
+    --action-form-close-button-fg: var(--button-fg);
+    --action-form-close-button-hover-fg: var(--button-fg);
+}
+
+select.admin-actionform-autocomplete {
+    width: 20em;
+}
+
+form {
+    width: 100% !important;
+}
+.cancel-link {
+    display: none;
+}
+
+/* Action form "Confirm" button */
+.action-form form input[type="submit"] {
+    background: var(--action-form-button-bg);
+    border-radius: 4px;
+    padding: 10px 20px;
+    color: var(--action-form-button-fg);
+    border:none;
+}
+.action-form form input[type="submit"]:hover {
+    background: var(--action-form-button-hover-bg);
+    color: var(--action-form-button-hover-fg);
+}
+
+/* Action form "Cancel" button */
+.action-form form .cancel-link {
+    background: var(--action-form-close-button-bg);
+    padding: 10px 20px;
+    color: var(--action-form-close-button-fg);
+    margin: 0 0 0 10px;
+}
+.action-form form .cancel-link:hover {
+    background: var(--action-form-close-button-hover-bg);
+    color: var(--action-form-close-button-hover-fg);
+}

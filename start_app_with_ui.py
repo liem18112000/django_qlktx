@@ -3,7 +3,8 @@ import socket
 import sys
 import webbrowser
 from multiprocessing import freeze_support, Process
-from tkinter import Tk, Label, Button, Entry, StringVar, messagebox
+from pathlib import Path
+from tkinter import Tk, Label, Button, Entry, StringVar, messagebox, PhotoImage
 from django.core.management import execute_from_command_line, call_command
 from django.contrib.auth import get_user_model
 
@@ -88,20 +89,28 @@ def run_server_action():
 def create_ui():
     root = Tk()
     root.title("Cửa sổ khởi động")
-    root.geometry("500x300")
+    root.geometry("500x400")
+
+    # Determine the base directory
+    if hasattr(sys, "_MEIPASS"):  # Running as an EXE
+        BASE_DIR = Path(sys._MEIPASS) / 'media'
+    else:  # Running in development
+        BASE_DIR = Path(__file__).resolve().parent / 'media'
+
+    # Load the logo
+    logo_path = BASE_DIR / 'logo.png'
+    try:
+        logo = PhotoImage(file=str(logo_path))
+        Label(root, image=logo).pack(pady=10)
+        root.iconphoto(True, logo)  # Set as window icon (optional)
+        root.logo = logo  # Prevent garbage collection
+    except Exception as e:
+        print(f"Failed to load logo: {e}")
 
     Label(root, text="Màn hình khởi động ứng dụng ", font=("Arial", 16)).pack(pady=10)
 
     # Button to directly run the Django server
     Button(root, text="Chạy ứng dụng", command=run_server_action, width=20).pack(pady=10)
-
-    # # Entry for custom command
-    # command_var = StringVar()
-    # Label(root, text="Nhập câu lệnh").pack(pady=5)
-    # Entry(root, textvariable=command_var, width=50).pack(pady=5)
-    #
-    # # Button to run custom command
-    # Button(root, text="Chạy câu lệnh", command=lambda: run_django_command(command_var), width=20).pack(pady=10)
 
     # Quit Button
     Button(root, text="Thoát ra", command=root.quit, width=20, fg="red").pack(pady=10)
