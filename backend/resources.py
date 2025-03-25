@@ -5,9 +5,11 @@ from sqlite3 import IntegrityError
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import QuerySet, Count, F
 from import_export import fields, resources
+from tablib import Dataset
 
 from backend.helper import RoomAssignmentHelper
 from backend.models import Student, Room, Building, Platoon
+from backend.signals import create_building_floors_and_rooms
 
 
 class BaseResource(resources.ModelResource):
@@ -52,6 +54,8 @@ class BaseResource(resources.ModelResource):
 class StudentResource(BaseResource):
     def __init__(self, *args, **kwargs):
         super().__init__(**kwargs)
+        self.done_import = None
+        self.assign_direct = None
         self.fill_partial_first = None
         self.selected_buildings = None
         self.fill_empty_first = None
@@ -62,7 +66,7 @@ class StudentResource(BaseResource):
 
     class Meta:
         model = Student
-        store_instance = True
+        use_bulk = True
         import_id_fields = (
             "building",
             "room",
@@ -182,11 +186,6 @@ class StudentResource(BaseResource):
             self.total_instances = len(dataset)  # Get total number of students
         print(self.total_instances)
 
-        if dry_run:  # Apply merging before confirmation
-            condition_for_partial = self.fill_partial_first is not None and self.fill_partial_first is not False
-            if self.processed_instances == self.total_instances and condition_for_partial:
-                print("Applying merging before confirmation page...")
-                self.merge_students_before_saving()
     # rules:
     # Assign rooms based on priority:
     # From lower floor to higher floor
@@ -194,65 +193,26 @@ class StudentResource(BaseResource):
     # Same gender in the same room
     # Same platoon/squad in the same room
 
-    def save_instance(self, instance, *args, **kwargs,):
+    def save_instance(self, instance, *args, **kwargs):
+
         self.assign_student_room(instance)
 
-        super().save_instance(instance, *args, **kwargs)
+        instance.save()
+        # super().save_instance(instance, *args, **kwargs)  # Save student first
+
         self.processed_instances += 1
+        if self.processed_instances == self.total_instances:
+            self.done_import = True
 
-        # If this is the last student, run merging logic first
-        condition_for_partial = self.fill_partial_first is not None and self.fill_partial_first is not False
-        if self.processed_instances == self.total_instances and condition_for_partial:
-            self.merge_students_before_saving()
-
-    def merge_students_before_saving(self, fill_partial_first, *args, **kwargs, ):
-        try:
-            #  Find rooms that are under-occupied (not full but have students)
-            under_occupied_rooms = (
-                Room.objects.annotate(student_count=Count("student"))  # Count related students
-                .filter(student_count__gt=0, student_count__lt=F("capacity"))  # Not empty, not full
-                .order_by("room_code")  # Order by room_code
-            )
-
-            # Convert rooms to list for processing
-            target_rooms = list(under_occupied_rooms)
-
-            #  Get students from under-occupied rooms
-            students_to_move = list(Student.objects.filter(room__in=under_occupied_rooms).order_by("id"))
-
-            #  Track students that need updating
-            students_to_update = []
-
-            #  Start merging students while respecting platoon alignment
-            for room in target_rooms:
-                available_slots = room.capacity - room.student_count  # How many students can fit?
-
-                # Get the first student in the room
-                first_student = Student.objects.filter(room=room).first()
-                if not first_student:
-                    continue  # Skip if no students in the room
-
-                room_platoon = first_student.platoon
-                room_gender = first_student.gender
-
-                #  Move students from under-occupied rooms, but only if they match the platoon and gender
-                filtered_students = [s for s in students_to_move if
-                                     s.platoon == room_platoon and s.gender == room_gender]
-
-                while available_slots > 0 and filtered_students:
-                    student = filtered_students.pop(0)  # Take the first matching student
-                    student.room = room  # Move student to the new room
-                    students_to_update.append(student)  # Add student to update list
-                    students_to_move.remove(student)  # Remove from global list
-                    available_slots -= 1  # Reduce available slots
-
-            #  Bulk update all moved students at once for efficiency
-            if students_to_update:
-                Student.objects.bulk_update(students_to_update, ["room"])
-
-        except Exception as e:
-            logging.error(f"error in merging: {e}")
-            return
+    def after_import(self, dataset, result, using_transactions, dry_run, **kwargs):
+        """
+        Perform bulk update after the actual import step.
+        """
+        if self.assign_direct is not True:
+            if self.fill_empty_first is False:
+                RoomAssignmentHelper.merge_students_before_saving()
+                RoomAssignmentHelper.arrange_students_within_building()
+                # RoomAssignmentHelper.arrange_rooms_by_platoon()
 
     def assign_student_room(self, instance):
         """Determine and apply the best strategy for assigning a room."""
@@ -312,6 +272,7 @@ class StudentResource(BaseResource):
         Select the best strategy based on available data and return required arguments.
         """
         if building is not None and room_code is not None:
+            self.assign_direct = True
             return RoomAssignmentHelper.assign_room_directly, (building, room_code), {}
 
         elif building is not None:
@@ -417,10 +378,15 @@ class RoomResource(BaseResource):
 
 
 class BuildingResource(BaseResource):
+    def __init__(self, *args, **kwargs):
+        super().__init__(**kwargs)
+        self.new_buidlings = set()
+
     class Meta:
         model = Building
         store_instance = True
         import_id_fields = ("id",)
+
         export_order = (
             "name",
             "number_of_floors",
@@ -476,24 +442,54 @@ class BuildingResource(BaseResource):
 
     def save_instance(self, instance, *args, **kwargs):
         building_name = getattr(instance, "name", "")
+        male_priority = int(getattr(instance, "male_priority", 0))
+        female_priority = int(getattr(instance, "female_priority", 0))
+        number_of_floors = int(getattr(instance,"number_of_floors", None))
+        number_of_room_each_floor = int(getattr(instance,"number_of_room_each_floor", None))
+        capacity_each_room = int(getattr(instance, "capacity_each_room", None))
 
         if not building_name:
             raise ValueError("Tên tòa nhà không hợp lệ.")
+
+        if not number_of_room_each_floor:
+            raise ValueError("number_of_room_each_floor is none")
+
+        if not capacity_each_room:
+            raise ValueError("capacity_each_room is none")
 
         try:
             # Try to get the existing building
             building = Building.objects.get(name=building_name)
         except ObjectDoesNotExist:
-            # Create a new building instance with all required fields
-            number_of_floors = getattr(instance, "number_of_floors", None)
             if number_of_floors is None:
                 raise ValueError("Số tầng của tòa nhà là bắt buộc.")
 
-            building = Building(name=building_name, number_of_floors=int(number_of_floors))
+            building = Building(
+                name=building_name,
+                number_of_floors=number_of_floors,
+                number_of_room_each_floor=number_of_room_each_floor,
+                capacity_each_room=capacity_each_room,
+                male_priority=male_priority,
+                female_priority=female_priority
+            )
             try:
                 building.save()
             except IntegrityError as e:
                 raise ValueError(f"Lỗi khi lưu tòa nhà: {str(e)}")
 
         instance = building
+        self.new_buidlings.add(instance)
         super().save_instance(instance, *args, **kwargs)
+
+    def after_import(self, dataset, result, using_transactions, dry_run, **kwargs):
+        """
+        Perform bulk update after the actual import step.
+        """
+        # Ensure new buildings exist and we are not in dry-run mode
+        if hasattr(self, 'new_buildings') and self.new_buildings and not dry_run:
+            # Convert set to list (optional, just for safety)
+            new_buildings = list(self.new_buildings)
+
+            # Call function to create floors and rooms for newly imported buildings
+            for new_building in new_buildings:
+                create_building_floors_and_rooms(new_building)

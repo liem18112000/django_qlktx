@@ -55,13 +55,13 @@ class Room(models.Model):
     is_temporary_lock = models.BooleanField("Khóa phòng tạm thời", default=False)
 
     def __str__(self):
-        return f"{self.building}-{self.room_code} tại tầng {self.floor.floor_number}"
+        return f"{self.building}-{self.room_code}"
 
 
 class Student(models.Model):
     class Meta:
         verbose_name = "Học viên"
-        verbose_name_plural = "Các học viên"
+        verbose_name_plural = "Học viên"
 
     # Full name of the student
     full_name = models.CharField("Họ và tên", max_length=255)
@@ -95,7 +95,7 @@ class Student(models.Model):
 class Platoon(models.Model):
     class Meta:
         verbose_name = "Trung đội"
-        verbose_name_plural = "Các trung đội"
+        verbose_name_plural = "Trung đội"
 
     name = models.CharField(max_length=100, verbose_name="Tên Trung đội")
 
@@ -110,7 +110,7 @@ class CustomUser(AbstractUser):
 
     class Meta:
         verbose_name = "Người dùng"
-        verbose_name_plural = "Các người dùng"
+        verbose_name_plural = "Người dùng"
 
     ROLE_CHOICES = [
         ("Student", "Học viên"),

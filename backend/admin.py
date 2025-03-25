@@ -3,7 +3,7 @@ from io import BytesIO
 import openpyxl
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.urls import reverse
 from django_admin_action_forms import action_with_form
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
@@ -265,7 +265,9 @@ class StudentAdmin(BaseAdmin):
 
             student.save()
 
-        RoomAssignmentHelper.merge_students_before_saving()
+        if flags.get("fill_empty_first") is False:
+            RoomAssignmentHelper.merge_students_before_saving()
+            RoomAssignmentHelper.arrange_students_within_building()
 
         self.message_user(request, f"{queryset.count()} học viên đã được sắp xếp phòng.")
 
@@ -385,10 +387,11 @@ class CustomAdminSite(admin.AdminSite):
         total_space = 0
         occupied_space = 0
         for index, building in enumerate(buildings):
-            room_count = building.number_of_room_each_floor * building.number_of_floors
+            locked_room = Room.objects.filter(building=building, is_lock=True).count()
+            room_count = building.number_of_room_each_floor * building.number_of_floors - locked_room
             all_space_count = room_count * building.capacity_each_room
             occupied_count = 0
-            for room in Room.objects.filter(building=building).all():
+            for room in Room.objects.filter(building=building):
                 occupied_count += Student.objects.filter(room=room).count()
             unoccupied_count = all_space_count - occupied_count
             item = {
