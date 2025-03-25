@@ -1,0 +1,28 @@
+/**** Style the top menu links like a button ****/
+.nav-item a[href="/admin/export-rooms-buildings/"] {
+    background-color: #007bff !important;  /* Green color */
+    color: white !important;
+    padding: 8px 12px;
+    border-radius: 5px;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.nav-item a[href="/admin/export-rooms-buildings/"]:hover {
+    background-color: #0069d9 !important; /* Darker green on hover */
+}
+
+body.jazzmin-login-page {
+    -ms-flex-align: center;
+    background-image: url(/media/bg.jpg);
+    background-repeat: no-repeat;
+    background-size: cover;
+    align-items: center;
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-direction: column;
+    flex-direction: column;
+    height: 100vh;
+    -ms-flex-pack: center;
+    justify-content: center;
+}
