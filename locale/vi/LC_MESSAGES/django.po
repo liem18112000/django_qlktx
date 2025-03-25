@@ -36,7 +36,7 @@ msgstr "Đăng xất"
 
 #: .\templates\admin\base.html:198
 msgid "See Profile"
-msgstr ""
+msgstr "Trang cá nhân"
 
 #: .\templates\admin\base.html:238
 msgid "Dashboard"
