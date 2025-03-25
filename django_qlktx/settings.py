@@ -13,6 +13,7 @@ import os
 import sys
 from datetime import timedelta
 from pathlib import Path
+from django.utils.translation import gettext_lazy as _
 
 import structlog
 
@@ -266,9 +267,14 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
+# Default language
+LANGUAGE_CODE = "vi"  # Set to Vietnamese by default (change to "en-us" if needed)
 
-LANGUAGES = [("en", "English"), ("vi", "Vietnam")]
+# List of supported languages
+LANGUAGES = [
+    ("en", _("English")),  # Use gettext_lazy for translatable names
+    ("vi", _("Vietnamese")),
+]
 
 LOCALE_PATHS = [
     os.path.join(BASE_DIR, "locale"),  # Ensure your project has this folder
@@ -349,7 +355,10 @@ JAZZMIN_SETTINGS = {
     "search_model": ["backend.Building", "backend.Room", "backend.Student"],
 
     "topmenu_links": [
-        {"name": "Xuất liệu báo cáo", "url": "/admin/export-rooms-buildings/"},
+        {
+            "name": "Xuất liệu báo cáo",
+            "url": "/admin/export-rooms-buildings/",
+        },
     ],
     # Field name on user model that contains avatar ImageField/URLField/Charfield or a callable that receives the user
     "user_avatar": None,
@@ -390,15 +399,17 @@ JAZZMIN_SETTINGS = {
     # UI Tweaks #
     #############
     # Relative paths to custom CSS/JS scripts (must be present in static files)
-    "custom_css": "../media/style.css", "../static/django_admin_action_forms/css/action_form.css"
-                                        "custom_js": None,
+    "custom_css":
+        "admin/custom_admin.css",
+    "custom_js": None,
     # Whether to link font from fonts.googleapis.com (use custom_css to supply font otherwise)
     "use_google_fonts_cdn": True,
     # Whether to show the UI customizer on the sidebar
-    "show_ui_builder": True,
+    "show_ui_builder": False,
     # Add a language dropdown into the admin
     "language_chooser": True,
 
 }
 
 AUTH_USER_MODEL = "backend.CustomUser"
+IMPORT_EXPORT_SKIP_ADMIN_CONFIRM = True
