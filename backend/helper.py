@@ -202,7 +202,7 @@ class RoomAssignmentHelper:
                                                                 instance.squad, floor=floor, **flags)
 
     @staticmethod
-    def merge_students_before_saving(*args, **kwargs):
+    def merge_students_before_saving(fill_partial_first=True, fill_empty_first=False):
         try:
             # Fetch all buildings
             buildings = Room.objects.values_list("building", flat=True).distinct()
@@ -210,7 +210,7 @@ class RoomAssignmentHelper:
             students_to_update = []  # Track students needing updates
 
             for building in buildings:
-                # Skip the building if the **first room itself is empty**
+                # Skip if every room in the building is empty
                 total_students_in_building = Student.objects.filter(room__building=building).count()
                 if total_students_in_building == 0:
                     continue  # Skip this building if completely empty
@@ -221,10 +221,20 @@ class RoomAssignmentHelper:
                     .annotate(student_count=Count("student"))
                 )
 
-                # Get rooms in the same building that are under-occupied
-                under_occupied_rooms = [
-                    room for room in rooms_in_building if 0 < room.student_count < room.capacity
-                ]
+                under_occupied_rooms = []
+
+                if fill_empty_first is True and fill_partial_first is not True:
+                    under_occupied_rooms = [
+                        room for room in rooms_in_building
+                        if 0 < room.student_count < room.capacity  # Room is not empty but not full
+                           and Student.objects.filter(room=room)
+                           .values("squad", "platoon", "gender").distinct().count() > 1  # ❗ Exclude uniform rooms
+                    ]
+                if fill_partial_first is not False:
+                    # Get rooms in the same building that are under-occupied
+                    under_occupied_rooms = [
+                        room for room in rooms_in_building if 0 < room.student_count < room.capacity
+                    ]
 
                 # Fetch students in under-occupied rooms **within the same building**
                 students_to_move = list(
@@ -261,16 +271,18 @@ class RoomAssignmentHelper:
 
                     room_platoon = first_student.platoon
                     room_gender = first_student.gender
+                    if fill_partial_first is not False:
+                        is_uniform_room = Student.objects.filter(room=room) \
+                                              .values("platoon", "gender", "squad") \
+                                              .distinct() \
+                                              .count() == 1
 
-                    # Ensure room is **not** uniform and less than half full before moving students out
-                    if (
-                            Student.objects.filter(room=room)
-                                    .values("platoon", "gender", "squad")
-                                    .distinct()
-                                    .count() == 1  # Room is already uniform
-                            and room_student_counts.get(room.id, 0) > (room.capacity / 2)  # More than half full
-                    ):
-                        continue  # Skip this room
+                        # Ensure room is **not** uniform and less than half full before moving students out
+                        if (
+                                is_uniform_room
+                                and room_student_counts.get(room.id, 0) > (room.capacity / 2)  # More than half full
+                        ):
+                            continue  # Skip this room
 
                     # Find students that match the room's **platoon** and **gender** within the same building
                     filtered_students = [
@@ -339,7 +351,7 @@ class RoomAssignmentHelper:
                         break  # No more students to move, exit loop
 
                     # Move students from the next occupied room to fill the current room
-                    students_to_move = Student.objects.filter(room=next_occupied_room).order_by("id")
+                    students_to_move = Student.objects.filter(room=next_occupied_room)
 
                     for student in students_to_move:
                         student.room = current_room  # Assign student to the empty room

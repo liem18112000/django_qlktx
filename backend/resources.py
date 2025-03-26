@@ -177,14 +177,40 @@ class StudentResource(BaseResource):
 
     def before_import(self, dataset, using_transactions, dry_run, **kwargs):
         """
+        Arrange students within the same platoon by squad order from 1 to N.
+        Move female students ('Giới tính' = 'Nữ') to the last rows within their platoon.
         Store the selected buildings at the beginning of the import process.
         """
         self.selected_buildings = kwargs.get("selected_building", None)
         self.fill_empty_first = bool(kwargs.get("fill_empty_first", False))
         self.fill_partial_first = bool(kwargs.get("fill_partial_first", True))
+
         if self.total_instances == 0:
             self.total_instances = len(dataset)  # Get total number of students
-        print(self.total_instances)
+
+        print("Total Instances:", self.total_instances)
+
+        # Convert dataset to a list of dictionaries for easier sorting
+        data_list = [dict(zip(dataset.headers, row)) for row in dataset]
+
+        # Sort students by:
+        # 1. Platoon (Trung đội)
+        # 2. Squad number (Tiểu đội) → Convert to integer for correct sorting
+        # 3. Gender (Giới tính) → Ensure "Nữ" comes last within each platoon
+        data_list.sort(
+            key=lambda x: (
+                x.get("Trung đội ", "").strip(),  # Sort by Platoon
+                x.get("Giới tính", "").strip() == "Nữ",  # Ensure "Nữ" goes last (False for "Nữ", True for "Nam")
+                int(x.get("Tiểu đội", 0))  # Sort by Squad Number
+            )
+        )
+
+        # Clear existing dataset and re-add sorted data
+        del dataset[:]  # This removes all rows while keeping headers
+        for row in data_list:
+            dataset.append(row.values())
+
+        print("Sorted Dataset:\n", dataset)
 
     # rules:
     # Assign rooms based on priority:
@@ -209,10 +235,8 @@ class StudentResource(BaseResource):
         Perform bulk update after the actual import step.
         """
         if self.assign_direct is not True:
-            if self.fill_empty_first is False:
-                RoomAssignmentHelper.merge_students_before_saving()
-                RoomAssignmentHelper.arrange_students_within_building()
-                # RoomAssignmentHelper.arrange_rooms_by_platoon()
+            RoomAssignmentHelper.merge_students_before_saving()
+            RoomAssignmentHelper.arrange_students_within_building()
 
     def assign_student_room(self, instance):
         """Determine and apply the best strategy for assigning a room."""

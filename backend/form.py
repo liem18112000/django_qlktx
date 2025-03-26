@@ -21,11 +21,11 @@ class StudentImportForm(ImportForm):
         required=False,
     )
     fill_empty_first = forms.BooleanField(
-        label="Sắp xếp học viên vào phòng trống",
+        label="Sắp xếp học viên lẻ vào phòng trống",
         required=False,
     )
     fill_partial_first = forms.BooleanField(
-        label="Sắp xếp học viên vào phòng có học viên",
+        label="Sắp xếp học viên lẻ vào phòng có học viên",
         required=False,
 
     )
