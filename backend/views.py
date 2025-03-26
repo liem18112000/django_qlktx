@@ -13,11 +13,11 @@ from backend.models import Floor, Room, Building, Student
 # Create your views here.
 def get_floors(request):
     building_id = request.GET.get("building_id")
-    floors = Floor.objects.filter(building_id=building_id).values("id", "floor_number")  #  Return filtered floors
+    floors = Floor.objects.filter(building_id=building_id).values("id", "floor_number")  # Return filtered floors
     return JsonResponse({"floors": list(floors)})
 
 
-@staff_member_required  #  Restrict access to admin users
+@staff_member_required  # Restrict access to admin users
 def export_rooms_buildings(request):
     """Export Buildings and Rooms into an Excel file with separate sheets"""
     wb = openpyxl.Workbook()
@@ -142,9 +142,9 @@ def add_rooms_sheet(wb):
 
     for room in Room.objects.all():
         student_count = get_student_count(room)
-        first_student = Student.objects.filter(room=room).first()  #  Get a first student safely
+        first_student = Student.objects.filter(room=room).first()  # Get a first student safely
 
-        if student_count > 0 and first_student:  #  Ensure there is a student
+        if student_count > 0 and first_student:  # Ensure there is a student
             ws_rooms.append([
                 room.building.name if room.building else "N/A",
                 room.room_code,
@@ -162,10 +162,10 @@ def get_reserved_count(building):
     """Get the count of allocated and available capacity for a given building"""
     total_capacity = 0
 
-    rooms = Room.objects.filter(building=building)  #  Optimize by fetching once
-    room_ids = rooms.values_list("id", flat=True)  #  Get only room IDs
+    rooms = Room.objects.filter(building=building)  # Optimize by fetching once
+    room_ids = rooms.values_list("id", flat=True)  # Get only room IDs
 
-    student_count = Student.objects.filter(room_id__in=room_ids).count()  #  Count students efficiently
+    student_count = Student.objects.filter(room_id__in=room_ids).count()  # Count students efficiently
 
     for room in rooms:
         if not room.is_lock and not room.is_temporary_lock:
@@ -176,4 +176,3 @@ def get_reserved_count(building):
 
 def get_student_count(room):
     return Student.objects.filter(room=room).count()
-
