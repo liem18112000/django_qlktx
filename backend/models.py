@@ -1,7 +1,8 @@
 from django.contrib.auth.models import AbstractUser, Group, Permission
-from django.db import models
+from django.db import models, transaction
 
 from backend.constants import Gender
+from backend.permissions_constants import ROLE_MODEL_PERMISSIONS
 
 
 # Create your models here.
@@ -53,6 +54,9 @@ class Room(models.Model):
 
     # Is_temporary_lock (Khóa tạm thời)
     is_temporary_lock = models.BooleanField("Khóa phòng tạm thời", default=False)
+
+    # Is_lock_to_move (Khóa học sinh bị dời ra ngoài)
+    is_lock_to_move = models.BooleanField("Khóa học sinh bị dời ra ngoài ", default=False)
 
     def __str__(self):
         return f"{self.building}-{self.room_code}"
@@ -116,6 +120,7 @@ class CustomUser(AbstractUser):
         ("Student", "Học viên"),
         ("Headmaster", "Chủ nhiệm trung đội"),
         ("Admin", "Quản lý phần mềm"),
+        ("Room Manager", "Lãnh đạo phòng")
     ]
 
     role = models.CharField(max_length=256, choices=ROLE_CHOICES, default="Học viên", verbose_name="Vai trò")
@@ -128,29 +133,33 @@ class CustomUser(AbstractUser):
     user_permissions = models.ManyToManyField(Permission, related_name="custom_user_permissions", blank=True,
                                               verbose_name="Quyền người dùng")
 
+    def has_permission(self, role_permissions):
+        """
+        Generic permission checker.
+        :param role_permissions: Dict of role-specific permissions.
+        :return: Boolean indicating whether the user has permission.
+        """
+        return role_permissions.get(self.role, False)
+
     def can_manage_student(self, student):
-        if self.role != "Admin":
-            return self.role == "Headmaster" and self.platoon == student.platoon
-        else:
-            return True
+        """ Headmaster can manage students in the same platoon, Admin can manage all """
+        return self.has_permission({"Admin": True, "Headmaster": self.platoon == student.platoon, "Room Manager": True})
+
+    def can_manage_platoon(self, platoon):
+        """ Headmaster can manage their own platoon, Admin can manage all """
+        return self.has_permission({"Admin": True, "Headmaster": self.platoon == platoon, "Room Manager": True})
 
     def can_manage_building(self, building):
-        if self.role != "Admin":
-            return self.role == "Headmaster" and self.buildings.filter(id=building.id).exists()
-        else:
-            return True
+        """ Only Admin can manage buildings """
+        return self.has_permission({"Admin": True})
 
     def can_manage_floor(self, floor):
-        if self.role != "Admin":
-            return self.role == "Headmaster" and floor in self.floors.all()
-        else:
-            return True
+        """ Room Manager can manage floors, Admin can manage all """
+        return self.has_permission({"Admin": True, "Room Manager": self.floors.filter(id=floor.id).exists()})
 
     def can_manage_room(self, room):
-        if self.role != "Admin":
-            return self.role == "Headmaster" and self.floors.filter(id=room.floor.id).exists()
-        else:
-            return True
+        """ Room Manager can manage rooms, Admin can manage all """
+        return self.has_permission({"Admin": True, "Room Manager": True})
 
 
 class Floor(models.Model):

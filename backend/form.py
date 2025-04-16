@@ -27,7 +27,6 @@ class StudentImportForm(ImportForm):
     fill_partial_first = forms.BooleanField(
         label="Sắp xếp học viên lẻ vào phòng có học viên",
         required=False,
-
     )
 
 

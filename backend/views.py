@@ -2,10 +2,11 @@ from io import BytesIO
 
 import openpyxl
 from django.contrib.admin.views.decorators import staff_member_required
-from django.db.models import Sum
+from django.db.models import Sum, Count
 from django.http import JsonResponse, HttpResponse
 from openpyxl.styles import Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
+from datetime import datetime
 
 from backend.models import Floor, Room, Building, Student
 
@@ -33,12 +34,15 @@ def export_rooms_buildings(request):
     wb.save(output)
     output.seek(0)
 
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    filename = f"Báo cáo-{date_str}.xlsx"
+
     #  Create HTTP Response
     response = HttpResponse(
         output.getvalue(),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-    response["Content-Disposition"] = 'attachment; filename="Báo cáo.xlsx"'
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
 
 
@@ -133,28 +137,37 @@ def adjust_column_width(ws):
 
 
 def add_rooms_sheet(wb):
-    """Add Rooms data to an Excel sheet"""
+    """Add Rooms data to an Excel sheet (split by room + platoon)"""
     ws_rooms = wb.create_sheet(title="Phòng")
 
     header_row = ["Tòa Nhà", "Phòng", "Trung đội", "Số lượng học viên", "Giới tính"]
     ws_rooms.append(header_row)
-    format_header(ws_rooms, len(header_row))  # Format the header
+    format_header(ws_rooms, len(header_row))
 
-    for room in Room.objects.all():
-        student_count = get_student_count(room)
-        first_student = Student.objects.filter(room=room).first()  # Get a first student safely
+    # Group students by room and platoon, and count
+    grouped = (
+        Student.objects
+        .select_related("room", "room__building")
+        .values("room", "room__room_code", "room__building__name", "platoon__name", "gender")
+        .annotate(student_count=Count("id"))
+    )
 
-        if student_count > 0 and first_student:  # Ensure there is a student
-            ws_rooms.append([
-                room.building.name if room.building else "N/A",
-                room.room_code,
-                f"{first_student.platoon}" if first_student else "N/A",
-                student_count,
-                first_student.gender if first_student else "N/A",
-            ])
+    for entry in grouped:
+        building_name = entry["room__building__name"] or "N/A"
+        room_code = entry["room__room_code"]
+        platoon = entry["platoon__name"]
+        student_count = entry["student_count"]
+        gender = entry["gender"]
+
+        ws_rooms.append([
+            building_name,
+            room_code,
+            platoon,
+            student_count,
+            gender
+        ])
 
     apply_table_borders(ws_rooms)
-
     adjust_column_width(ws_rooms)
 
 
@@ -172,7 +185,3 @@ def get_reserved_count(building):
             total_capacity += room.capacity
 
     return student_count
-
-
-def get_student_count(room):
-    return Student.objects.filter(room=room).count()

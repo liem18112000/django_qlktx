@@ -3,6 +3,8 @@ from io import BytesIO
 import openpyxl
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import Permission
+from django.db import transaction
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django_admin_action_forms import action_with_form
@@ -14,6 +16,7 @@ from backend.form import StudentExportForm, RoomExportForm, BuildingExportForm, 
     SetBuildingForArrange
 from backend.helper import RoomAssignmentHelper
 from backend.models import Building, Room, Student, CustomUser, Platoon, Floor
+from backend.permissions_constants import ROLE_MODEL_PERMISSIONS
 from backend.resources import StudentResource, RoomResource, BuildingResource
 
 
@@ -216,60 +219,92 @@ class StudentAdmin(BaseAdmin):
         description="sắp xếp học viên đã chọn",
     )
     def arrange_student_to_building_action(self, request, queryset, data):
-        """Assign students to buildings and floors based on gender selection or automatic priority."""
+        """Assign students to buildings and floors based on gender or auto priority."""
 
-        general_building, general_floor = data.get("building"), data.get("floor")
+        general_building, general_floor, flags = self.extract_data(data)
+        general_floor_number = self.get_floor_number(general_floor)
+
+        gender_rules = self.get_gender_rules(data)
+
+        for student in queryset:
+            self.assign_student_room(
+                student,
+                general_building,
+                general_floor_number,
+                gender_rules,
+                flags
+            )
+            student.save()
+
+        RoomAssignmentHelper.move_oversize_squad_to_last()
+        RoomAssignmentHelper.merge_students_before_saving()
+        if flags["fill_partial_first"] is not None and flags["fill_empty_first"] is False:
+            print("fill_partial_first is called")
+            RoomAssignmentHelper.fill_student_to_room_after_merge()
+
+        else:
+            dict_last_room = RoomAssignmentHelper.get_last_roon_have_students()
+            RoomAssignmentHelper.fill_student_to_room_after_merge(dict_last_room)
+        RoomAssignmentHelper.lock_under_occupied_rooms()
+
+        self.message_user(request, f"{queryset.count()} học viên đã được sắp xếp phòng.")
+
+    def extract_data(self, data):
+        """Extract general building, floor, and flags."""
+        general_building = data.get("building")
+        general_floor = data.get("floor")
 
         flags = {
             "fill_empty_first": data.get("fill_empty_first", False),
             "fill_partial_first": data.get("fill_partial_first", True)
         }
+        return general_building, general_floor, flags
 
-        if isinstance(general_floor, Floor):
-            general_floor_number = general_floor.floor_number
-        else:
-            general_floor_number = None  # Default value if it's not a Floor instance
+    def get_floor_number(self, floor_obj):
+        """Safely extract floor number if valid Floor object."""
+        return floor_obj.floor_number if isinstance(floor_obj, Floor) else None
 
-        gender_1, building_1, floor_1 = data.get("gender_1"), data.get("building_1"), data.get("floor_1")
-        gender_2, building_2, floor_2 = data.get("gender_2"), data.get("building_2"), data.get("floor_2")
+    def get_gender_rules(self, data):
+        """Prepare gender-based building/floor assignments."""
+        return [
+            {
+                "gender": (data.get("gender_1") or "").strip().lower(),
+                "building": data.get("building_1"),
+                "floor_number": self.get_floor_number(data.get("floor_1"))
+            },
+            {
+                "gender": (data.get("gender_2") or "").strip().lower(),
+                "building": data.get("building_2"),
+                "floor_number": self.get_floor_number(data.get("floor_2"))
+            }
+        ]
 
-        if isinstance(floor_1, Floor):
-            floor_number_1 = floor_1.floor_number
-        else:
-            floor_number_1 = None
+    def assign_student_room(self, student, general_building, general_floor_number, gender_rules, flags):
+        """Assign a student to a room based on available rules."""
+        student_gender = (student.gender or "").strip().lower()
 
-        if isinstance(floor_2, Floor):
-            floor_number_2 = floor_2.floor_number
-        else:
-            floor_number_2 = None
+        # Priority 1: General building + floor
+        if general_building and general_floor_number:
+            RoomAssignmentHelper.assign_room_by_building_and_floor(
+                student, general_building, general_floor_number, **flags
+            )
+            return
 
-        for student in queryset:
-            student_gender = student.gender.strip().lower()
-            gender_assignment_1 = (gender_1 and student_gender == gender_1.strip().lower() and building_1 and
-                                   floor_number_1)
-            gender_assignment_2 = (gender_2 and student_gender == gender_2.strip().lower() and building_2 and
-                                   floor_number_2)
+        # Priority 2: Gender-based rule
+        for rule in gender_rules:
+            if (
+                    rule["gender"]
+                    and student_gender == rule["gender"]
+                    and rule["building"]
+                    and rule["floor_number"] is not None
+            ):
+                RoomAssignmentHelper.assign_room_by_building_and_floor(
+                    student, rule["building"], rule["floor_number"], **flags
+                )
+                return
 
-            if general_building and general_floor_number:
-                RoomAssignmentHelper.assign_room_by_building_and_floor(student, general_building, general_floor_number,
-                                                                       **flags)
-
-            elif gender_assignment_1:
-                RoomAssignmentHelper.assign_room_by_building_and_floor(student, building_1, floor_number_1, **flags)
-
-            elif gender_assignment_2:
-                RoomAssignmentHelper.assign_room_by_building_and_floor(student, building_2, floor_number_2, **flags)
-
-            else:
-                RoomAssignmentHelper.assign_room_by_priority(student, **flags)
-
-            student.save()
-
-        if flags.get("fill_empty_first") is False:
-            RoomAssignmentHelper.merge_students_before_saving()
-            RoomAssignmentHelper.arrange_students_within_building()
-
-        self.message_user(request, f"{queryset.count()} học viên đã được sắp xếp phòng.")
+        # Priority 3: Auto priority fallback
+        RoomAssignmentHelper.assign_room_by_priority(student, **flags)
 
     def get_import_data_kwargs(self, request, *args, **kwargs):
         """
@@ -333,6 +368,22 @@ class CustomUserAdmin(UserAdmin):
 
     ordering = ("username",)
 
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        user = form.instance
+        self.update_permissions(user)
+
+    def update_permissions(self, user):
+        with transaction.atomic():
+            # Clear existing user_permissions
+            user.user_permissions.clear()
+
+            # Assign new permissions based on role
+            model_perms = ROLE_MODEL_PERMISSIONS.get(user.role, [])
+            perms = Permission.objects.filter(codename__in=model_perms)
+            user.user_permissions.set(perms)
+
+
 
 @admin.register(Platoon)
 class PlatoonAdmin(BaseAdmin):
@@ -349,6 +400,21 @@ class PlatoonAdmin(BaseAdmin):
         students = Student.objects.filter(platoon=obj).count()
 
         return f"{students} học viên"
+
+    def has_add_permission(self, request, obj=None):
+        if obj and not request.user.can_manage_platoon(obj):
+            return False
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        if obj and not request.user.can_manage_platoon(obj):
+            return False
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and not request.user.can_manage_platoon(obj):
+            return False
+        return True
 
 
 # Custom Admin Dashboard

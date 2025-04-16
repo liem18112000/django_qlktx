@@ -1,9 +1,11 @@
+from django.contrib.auth.models import Permission
 from django.db import transaction
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
 from backend.helper import RoomAssignmentHelper
-from backend.models import Room, Floor, Building, Student
+from backend.models import Room, Floor, Building, Student, CustomUser, Platoon
+from backend.permissions_constants import ROLE_MODEL_PERMISSIONS
 
 
 @receiver(pre_save, sender=Building)
@@ -44,7 +46,7 @@ def create_building_floors_and_rooms(building):
             room_code = f"{floor.floor_number}0{j}" if j < 10 else f"{floor.floor_number}{j}"
             room = Room(
                 building=building,
-                floor=floor,  # ✅ Fix: Assign floor
+                floor=floor,  # Fix: An assign floor
                 room_code=room_code,
                 capacity=capacity_each_room
             )
@@ -54,7 +56,7 @@ def create_building_floors_and_rooms(building):
     # Bulk create rooms
     created_rooms = Room.objects.bulk_create(rooms)
 
-    # ✅ Assign rooms to floors (ManyToMany)
+    # Assign rooms to floors (ManyToMany)
     room_iterator = iter(created_rooms)
     for floor, room_list in room_mapping.items():
         floor.rooms.set([next(room_iterator) for _ in room_list])
@@ -86,23 +88,23 @@ def remove_excess_rooms(floor, new_room_count):
             students_in_room = Student.objects.filter(room=room)
 
             if students_in_room.exists():
-                # ✅ Try to rearrange students in the same building first
+                # Try to rearrange students in the same building first
                 success = move_students_to_available_room(students_in_room, room)
 
                 if not success:
-                    # ✅ If no space in the same building, move to another building
+                    # If no space in the same building, move to another building
                     success = move_students_to_another_building(students_in_room, room.building)
 
                     if not success:
-                        print(f"⚠️ Cannot delete room {room.room_code}, no available space in any building.")
+                        print(f" Cannot delete room {room.room_code}, no available space in any building.")
                         continue  # Skip deleting this room
 
-            # ✅ Recheck if the room is now empty before deletion
+            # Recheck if the room is now empty before deletion
             if not Student.objects.filter(room=room).exists():
                 floor.rooms.remove(room)  # Remove from ManyToMany
                 room.delete()
             else:
-                print(f"⚠️ Room {room.room_code} was not deleted because students are still assigned.")
+                print(f" Room {room.room_code} was not deleted because students are still assigned.")
 
 
 def move_students_to_available_room(students, room):
@@ -112,12 +114,12 @@ def move_students_to_available_room(students, room):
             available_room = RoomAssignmentHelper.get_available_room(room.building, student.gender, student.platoon,
                                                                      student.squad)
             student.room = available_room
-            student.save()  # ✅ Move student to new room
+            student.save()  # Move student to new room
         except Exception as e:
             print(e)
-            return False  # ❌ No space available in the same building
+            return False  # No space available in the same building
 
-    return True  # ✅ Successfully moved all students
+    return True  # Successfully moved all students
 
 
 def move_students_to_another_building(students, current_building):
@@ -128,16 +130,16 @@ def move_students_to_another_building(students, current_building):
                 '-female_priority' if student.gender == "Nữ" else '-male_priority').first()
 
             if not available_building:
-                return False  # ❌ No other buildings available
+                return False  # No other buildings available
 
             available_room = RoomAssignmentHelper.get_available_room(available_building, student.gender,
                                                                      student.platoon, student.squad)
             student.room = available_room
-            student.save()  # ✅ Move student to new building
+            student.save()  # Move student to new building
         except Exception:
-            return False  # ❌ No space in any other building
+            return False  # No space in any other building
 
-    return True  # ✅ Successfully moved all students
+    return True  # Successfully moved all students
 
 
 def add_missing_rooms(floor, new_room_count, building, capacity_each_room):
