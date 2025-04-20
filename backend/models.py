@@ -1,8 +1,7 @@
 from django.contrib.auth.models import AbstractUser, Group, Permission
-from django.db import models, transaction
+from django.db import models
 
 from backend.constants import Gender
-from backend.permissions_constants import ROLE_MODEL_PERMISSIONS
 
 
 # Create your models here.
@@ -26,6 +25,7 @@ class Building(models.Model):
 
     male_priority = models.PositiveSmallIntegerField(default=0, verbose_name="Độ ưu tiên (dành cho xếp ưu tiên kí "
                                                                              "túc xá nam)")
+    under_occupied = models.BooleanField("có học sinh ở tất cả phòng", default=False)
 
     def __str__(self):
         return self.name
