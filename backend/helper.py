@@ -1,18 +1,19 @@
 import logging
-from collections import Counter, defaultdict
-from itertools import cycle
+from collections import defaultdict
 
 from django.db import models
-from django.db.models import Count, F, Q
+from django.db.models import Count
 
 from .models import Room, Student, Building, Floor, Platoon
-from .room_cache import RoomAssignmentCache
 
 
 class RoomAssignmentHelper:
     """
     Helper class to manage room assignments for students.
     """
+    has_oversized_student = True
+    processed_squads_by_platoon = set()  # chứa tuple (platoon, squad)
+    has_unassigned_student = False
 
     @staticmethod
     def assign_room_directly(instance, building, room_code):
@@ -39,16 +40,34 @@ class RoomAssignmentHelper:
     def assign_room_by_priority(instance, **flags):
         """Assign a building based on gender priority."""
         gender = instance.gender
+        buildings = RoomAssignmentHelper.get_first_building_with_available_room(gender)
+
+        for building in buildings:
+            instance.room = RoomAssignmentHelper.get_available_room(building, gender, instance.platoon,
+                                                                    instance.squad, None, instance, **flags)
+            room = getattr(instance, "room", None)
+            if room is not None:
+                return
+
+    @staticmethod
+    def get_first_building_with_available_room(gender):
+        result = []
+        # Lấy danh sách building theo thứ tự ưu tiên
         buildings = Building.objects.all().order_by(
             '-female_priority' if gender == "Nữ" else '-male_priority'
         )
 
         for building in buildings:
-            instance.room = RoomAssignmentHelper.get_available_room(building, gender, instance.platoon,
-                                                                    instance.squad, **flags)
-            room = getattr(instance, "room", None)
-            if room is not None:
-                return
+            rooms = Room.objects.filter(building=building)
+
+            for room in rooms:
+                # Đếm số student đã gán vào room này (optional: lọc theo gender)
+                current_count = Student.objects.filter(room=room).count()
+
+                if current_count < room.capacity:
+                    result.append(building)
+                    break  # Chỉ cần 1 room trống là ok rồi
+        return result
 
     @staticmethod
     def assign_room_by_selected_building(instance, selected_building_name=None, **flags):
@@ -62,7 +81,10 @@ class RoomAssignmentHelper:
             raise Exception(f"Tòa nhà '{selected_building_name}' không tồn tại.")
 
         instance.room = RoomAssignmentHelper.get_available_room(building, instance.gender, instance.platoon,
-                                                                instance.squad, **flags)
+                                                                instance.squad, None, instance, **flags)
+        room = getattr(instance, "room", None)
+        if room is None:
+            RoomAssignmentHelper.assign_room_by_priority(instance)
 
     @staticmethod
     def get_building_with_gender(instance):
@@ -74,14 +96,14 @@ class RoomAssignmentHelper:
         return buildings
 
     @staticmethod
-    def get_available_room(building, gender, platoon, squad, floor=None, **flags):
+    def get_available_room(building, gender, platoon, squad, floor=None, *args, **flags):
         """
         Tries to assign a room starting from a selected floor and moves to higher floors if no rooms are available.
         - If `fill_empty_first` is True, prioritize assigning completely empty rooms before filling partially occupied ones.
         - If a squad has extra students (e.g., 12 students in a 10-person room), try merging them with another squad.
         - If merging is not possible, create a new room.
         """
-
+        student_qs = args[0]
         # Step 1: Try to find rooms on the specified floor first
         available_rooms = RoomAssignmentHelper.get_rooms_by_floor(building, floor)
 
@@ -94,9 +116,11 @@ class RoomAssignmentHelper:
 
         # Step 1: Handle squad merging if squad size exceeds room capacity
         if room := RoomAssignmentHelper.fill_partial_room_first(available_rooms, gender, platoon, squad):
+            RoomAssignmentHelper.processed_squads_by_platoon.add((student_qs.platoon, student_qs.squad))
             return room
 
         # Step 2: If no partial fill is possible, create a new room
+
         if room := RoomAssignmentHelper.fill_empty_room_first(available_rooms, gender, platoon, squad):
             return room
 
@@ -231,99 +255,99 @@ class RoomAssignmentHelper:
     @staticmethod
     def merge_students_before_saving():
         try:
+            from_buildings = Room.objects.values_list("building", flat=True).distinct()
             students_to_update = []
 
-            # Get all unlocked, non-temporary-locked rooms
-            rooms = (
-                Room.objects.filter(is_temporary_lock=False, is_lock=False)
-                .annotate(
-                    student_count=Count("student"),
-                    distinct_platoon=Count("student__platoon", distinct=True),
-                    distinct_squad=Count("student__squad", distinct=True),
-                    distinct_gender=Count("student__gender", distinct=True),
-                )
-            )
-
-            # Filter under-occupied rooms that are at least partially filled and not fully diverse
-            under_occupied_rooms = [
-                room for room in rooms
-                if 0 < room.student_count < room.capacity and (room.distinct_platoon + room.distinct_gender == 2)
-            ]
-
-            if not under_occupied_rooms:
-                return []
-
-            # Create a room lookup and initial counts
-            room_lookup = {room.id: room for room in under_occupied_rooms}
-            room_student_counts = {room.id: room.student_count for room in under_occupied_rooms}
-
-            # Get students from those rooms, excluding fully diverse & more than half full ones
-            students_to_move = list(
-                Student.objects.filter(room__in=under_occupied_rooms)
-                .exclude(
-                    room__in=[
-                        room for room in under_occupied_rooms
-                        if (
-                                   room.distinct_platoon + room.distinct_squad + room.distinct_gender == 3 and
-                                   room.student_count > (room.capacity / 2)
-                           ) or (room.distinct_platoon + room.distinct_squad + room.distinct_gender != 3)
-                    ]
-                )
-            )
-
-            for room in under_occupied_rooms[:]:  # copy for safe modification
-                available_slots = room.capacity - room_student_counts.get(room.id, 0)
-
-                if available_slots <= 0:
+            for building in from_buildings:
+                total_students_in_building = Student.objects.filter(room__building=building).count()
+                if total_students_in_building == 0:
                     continue
 
-                if room_student_counts[room.id] == 0:
-                    # If room is empty, assign first student arbitrarily
-                    if students_to_move:
-                        student = students_to_move.pop(0)
+                rooms_in_building = (
+                    Room.objects.filter(building=building, is_temporary_lock=False, is_lock=False)
+                    .annotate(
+                        student_count=Count("student"),
+                        distinct_platoon=Count("student__platoon", distinct=True),
+                        distinct_squad=Count("student__squad", distinct=True),
+                        distinct_gender=Count("student__gender", distinct=True),
+                    )
+                )
+
+                under_occupied_rooms = [
+                    room for room in rooms_in_building
+                    if 0 < room.student_count < room.capacity and room.distinct_platoon + room.distinct_gender == 2
+                ]
+
+                # Create a lookup for faster access
+                room_lookup = {room.id: room for room in under_occupied_rooms}
+
+                students_to_move = list(
+                    Student.objects.filter(room__in=under_occupied_rooms)
+                    .exclude(
+                        room__in=[
+                            room for room in under_occupied_rooms
+                            if (
+                                       room.distinct_platoon + room.distinct_squad + room.distinct_gender == 3
+                                       and room.student_count > (room.capacity / 2)
+                               ) or room.distinct_platoon + room.distinct_squad + room.distinct_gender != 3
+                        ]
+                    )
+                )
+
+                room_student_counts = {room.id: room.student_count for room in under_occupied_rooms}
+
+                for room in under_occupied_rooms[:]:  # Copy list to safely modify it inside loop
+                    available_slots = room.capacity - room_student_counts.get(room.id, 0)
+
+                    if available_slots <= 0:
+                        continue  # Skip if already full
+
+                    if room_student_counts[room.id] == 0:
+                        if students_to_move:
+                            student = students_to_move.pop(0)
+                            previous_room = student.room
+                            student.room = room
+                            student.save(update_fields=["room"])
+                            students_to_update.append(student)
+                            room_student_counts[room.id] += 1
+                            room_student_counts[previous_room.id] -= 1
+                            available_slots -= 1
+                        else:
+                            continue
+
+                    first_student = Student.objects.filter(room=room).first()
+                    if not first_student:
+                        continue
+
+                    room_platoon = first_student.platoon
+                    room_gender = first_student.gender
+
+                    filtered_students = [
+                        s for s in students_to_move if s.platoon == room_platoon and s.gender == room_gender
+                    ]
+
+                    while available_slots > 0 and filtered_students:
+                        student = filtered_students.pop(0)
+                        if student.room.id == room.id:
+                            students_to_update.append(student)
+                            students_to_move.remove(student)
+                            continue
+
                         previous_room = student.room
                         student.room = room
                         student.save(update_fields=["room"])
                         students_to_update.append(student)
+                        students_to_move.remove(student)
 
                         room_student_counts[room.id] += 1
                         room_student_counts[previous_room.id] -= 1
                         available_slots -= 1
-                    else:
-                        continue
 
-                first_student = Student.objects.filter(room=room).first()
-                if not first_student:
-                    continue
-
-                room_platoon = first_student.platoon
-                room_gender = first_student.gender
-
-                # Match students by platoon and gender
-                compatible_students = [
-                    s for s in students_to_move if s.platoon == room_platoon and s.gender == room_gender
-                ]
-
-                while available_slots > 0 and compatible_students:
-                    student = compatible_students.pop(0)
-
-                    if student.room.id == room.id:
-                        students_to_update.append(student)
-                        students_to_move.remove(student)
-                        continue
-
-                    previous_room = student.room
-                    student.room = room
-                    student.save(update_fields=["room"])
-                    students_to_update.append(student)
-                    students_to_move.remove(student)
-
-                    room_student_counts[room.id] += 1
-                    room_student_counts[previous_room.id] -= 1
-                    available_slots -= 1
-
-                if room_student_counts[room.id] >= room.capacity:
-                    under_occupied_rooms = [r for r in under_occupied_rooms if r.id != room.id]
+                    # Remove from a target list if full
+                    if room_student_counts[room.id] >= room.capacity:
+                        under_occupied_rooms = [
+                            r for r in under_occupied_rooms if r.id != room.id
+                        ]
 
             RoomAssignmentHelper.arrange_students_within_building()
             return students_to_update
@@ -426,7 +450,7 @@ class RoomAssignmentHelper:
         try:
             students_to_update = []
 
-            buildings = RoomAssignmentHelper.get_buildings_with_priority(selected_building_name)
+            buildings = Room.objects.values_list("building", flat=True).distinct()
 
             for building in buildings:
                 total_students = Student.objects.filter(room__building=building).count()
@@ -514,122 +538,6 @@ class RoomAssignmentHelper:
         except Exception as e:
             logging.error(f"Error in fill_partial_room_after_merge: {e}")
             raise Exception(f"Error after merge: {e}")
-
-    @staticmethod
-    def assign_overflow_students_globally(last_room_dict=None, selected_building_name=None):
-        try:
-            students_to_update = []
-
-            # Step 1: Get prioritized building list
-            buildings = RoomAssignmentHelper.get_buildings_with_priority(selected_building_name)
-            building_order = {b.id: idx for idx, b in enumerate(buildings)}
-
-            # Step 2: Fetch rooms that are unlocked and not temp-locked, annotate with student count
-            room_queryset = (
-                Room.objects
-                .filter(is_lock=False, is_temporary_lock=False)
-                .annotate(student_count=Count("student"))
-                .prefetch_related("student_set")
-            )
-
-            # Step 3: Apply last_room_dict filter (if provided)
-            if last_room_dict:
-                last_room_filters = Q()
-                for building_id, last_room in last_room_dict.items():
-                    last_room_filters |= Q(building_id=building_id, id__gt=last_room.id)
-                room_queryset = room_queryset.filter(last_room_filters)
-
-            # Step 4: Precompute group diversity of each room (to filter eligible rooms)
-            group_map = (
-                Student.objects
-                .filter(room__in=room_queryset.values_list("id", flat=True))
-                .values("room_id", "platoon", "gender", "squad")
-                .distinct()
-            )
-
-            room_group_set = defaultdict(set)
-            for row in group_map:
-                key = (row["platoon"], row["gender"], row["squad"])
-                room_group_set[row["room_id"]].add(key)
-
-            # Step 5: Build list of eligible candidate rooms
-            candidate_rooms = []
-            room_student_counts = {}
-
-            for room in room_queryset:
-                if room.student_count >= room.capacity:
-                    continue
-
-                if len(room_group_set[room.id]) <= 1:
-                    continue
-
-                candidate_rooms.append(room)
-                room_student_counts[room.id] = room.student_count
-
-            # Step 6: Sort candidate rooms by building priority & room ID
-            candidate_rooms.sort(key=lambda r: (building_order.get(r.building_id, 9999), r.id))
-
-            # Step 7: Fetch all moveable students in candidate rooms
-            students_to_move = list(
-                Student.objects
-                .filter(room__in=[r.id for r in candidate_rooms], room__is_lock_to_move=False)
-                .select_related("room")
-            )
-
-            # Optional: create quick lookup for students by room
-            students_by_room = defaultdict(list)
-            for student in students_to_move:
-                students_by_room[student.room_id].append(student)
-
-            full_rooms = set()
-
-            # Step 8: Assign students to target rooms based on matching criteria
-            for target_room in candidate_rooms:
-                if target_room.id in full_rooms:
-                    continue
-
-                if room_student_counts.get(target_room.id, 0) >= target_room.capacity:
-                    full_rooms.add(target_room.id)
-                    continue
-
-                # Reference student to match gender & platoon
-                base_student = next(iter(target_room.student_set.all()), None)
-                if not base_student:
-                    continue
-
-                matching_students = [
-                    s for s in students_to_move
-                    if s.room.id != target_room.id and
-                       s.gender == base_student.gender
-                ]
-
-                for student in matching_students:
-                    if room_student_counts[target_room.id] >= target_room.capacity:
-                        full_rooms.add(target_room.id)
-                        break
-
-                    # Move student
-                    previous_room_id = student.room.id
-                    student.room = target_room
-                    students_to_update.append(student)
-
-                    # Update counts
-                    room_student_counts[target_room.id] += 1
-                    room_student_counts[previous_room_id] -= 1
-
-            # Step 9: Bulk update students
-            if students_to_update:
-                BATCH_SIZE = 200
-                for i in range(0, len(students_to_update), BATCH_SIZE):
-                    Student.objects.bulk_update(students_to_update[i:i + BATCH_SIZE], ["room"])
-
-                RoomAssignmentHelper.arrange_students_within_building()
-
-            return students_to_update
-
-        except Exception as e:
-            logging.error(f"Error in assign_overflow_students_globally: {e}")
-            raise Exception(f"Error in overflow assignment: {e}")
 
     @staticmethod
     def move_oversize_squad_to_last():
@@ -789,14 +697,3 @@ class RoomAssignmentHelper:
             )
 
             empty_rooms_with_lock.update(is_lock_to_move=False)
-
-    @staticmethod
-    def available_room_generator(building):
-        return iter(
-            Room.objects.filter(
-                is_lock=False,
-                is_temporary_lock=False,
-                is_lock_to_move=False,
-                building=building
-            ).order_by("id")
-        )

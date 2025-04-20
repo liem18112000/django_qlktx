@@ -5,19 +5,21 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import Permission
 from django.db import transaction
-from django.shortcuts import render, redirect
+from django.shortcuts import render
 from django.urls import reverse
 from django_admin_action_forms import action_with_form
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 from openpyxl.styles import Border, Side
 from openpyxl.utils import get_column_letter
 
+from backend.building_utils import BuildingUtils
 from backend.form import StudentExportForm, RoomExportForm, BuildingExportForm, StudentImportForm, \
     SetBuildingForArrange
 from backend.helper import RoomAssignmentHelper
 from backend.models import Building, Room, Student, CustomUser, Platoon, Floor
 from backend.permissions_constants import ROLE_MODEL_PERMISSIONS
 from backend.resources import StudentResource, RoomResource, BuildingResource
+from backend.student_utils import StudentUtils
 
 
 class BaseAdmin(ImportExportModelAdmin, ExportActionModelAdmin, admin.ModelAdmin):
@@ -236,15 +238,21 @@ class StudentAdmin(BaseAdmin):
             )
             student.save()
 
+        BuildingUtils.update_building_under_occupied()
         RoomAssignmentHelper.move_oversize_squad_to_last()
         RoomAssignmentHelper.merge_students_before_saving()
         if flags["fill_partial_first"] is not None and flags["fill_empty_first"] is False:
             print("fill_partial_first is called")
             RoomAssignmentHelper.fill_student_to_room_after_merge()
-
         else:
             dict_last_room = RoomAssignmentHelper.get_last_roon_have_students()
             RoomAssignmentHelper.fill_student_to_room_after_merge(dict_last_room)
+
+        StudentUtils.handle_filling_student_across_building()
+        StudentUtils.handle_mixed_squad_with_same_platoon()
+        StudentUtils.fill_empty_rooms_in_dest_from_source()
+        RoomAssignmentHelper.arrange_students_within_building()
+        BuildingUtils.unlock_building_with_empty_room()
         RoomAssignmentHelper.lock_under_occupied_rooms()
 
         self.message_user(request, f"{queryset.count()} học viên đã được sắp xếp phòng.")
