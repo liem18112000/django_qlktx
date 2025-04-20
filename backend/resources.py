@@ -1,12 +1,11 @@
-import logging
 from collections import defaultdict
 from sqlite3 import IntegrityError
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import QuerySet, Count, F
+from django.db.models import QuerySet
 from import_export import fields, resources
-from tablib import Dataset
 
+from backend.building_utils import BuildingUtils
 from backend.helper import RoomAssignmentHelper
 from backend.models import Student, Room, Building, Platoon
 from backend.room_cache import RoomAssignmentCache
@@ -193,21 +192,52 @@ class StudentResource(BaseResource):
         # Convert dataset to a list of dictionaries for easier sorting
         data_list = [dict(zip(dataset.headers, row)) for row in dataset]
 
-        # Sort students by:
-        # 1. Platoon (Trung đội)
-        # 2. Squad number (Tiểu đội) → Convert to integer for correct sorting
-        # 3. Gender (Giới tính) → Ensure "Nữ" comes last within each platoon
-        data_list.sort(
-            key=lambda x: (
-                x.get("Trung đội ", "").strip(),  # Sort by Platoon
-                x.get("Giới tính", "").strip() == "Nữ",  # Ensure "Nữ" goes last (False for "Nữ", True for "Nam")
-                int(x.get("Tiểu đội", 0))  # Sort by Squad Number
-            )
-        )
+        # Nhóm theo Trung đội (nếu không có thì mặc định)
+        platoon_groups = defaultdict(list)
+        for item in data_list:
+            platoon = item.get("Trung đội ", "").strip() or "Default"
+            platoon_groups[platoon].append(item)
 
-        # Clear existing dataset and re-add sorted data
-        del dataset[:]  # This removes all rows while keeping headers
-        for row in data_list:
+        sorted_final = []
+
+        for platoon_name in sorted(platoon_groups.keys()):
+            members = platoon_groups[platoon_name]
+
+            # Nhóm thành viên theo Tiểu đội
+            squad_map = defaultdict(list)
+            for m in members:
+                squad_number = int(m.get("Tiểu đội", 0))
+                squad_map[squad_number].append(m)
+
+            selected_squad_members = []
+            used_ids = set()
+
+            # Giai đoạn 1: chọn 1 người từ mỗi Tiểu đội (ưu tiên Nam), theo thứ tự
+            for squad_number in sorted(squad_map.keys()):
+                candidates = squad_map[squad_number]
+                male = next((c for c in candidates if c.get("Giới tính", "").strip() != "Nữ"), None)
+                chosen = male or candidates[0]
+                selected_squad_members.append(chosen)
+                used_ids.add(id(chosen))
+
+            # Giai đoạn 2: phần còn lại
+            remaining_members = [m for m in members if id(m) not in used_ids]
+
+            # Sắp phần còn lại: Tiểu đội tăng dần, Nam trước Nữ
+            remaining_sorted = sorted(
+                remaining_members,
+                key=lambda x: (
+                    int(x.get("Tiểu đội", 0)),  # Theo số tiểu đội
+                    x.get("Giới tính", "").strip() == "Nữ"  # Nam trước (False < True)
+                )
+            )
+
+            # Gộp lại theo đúng yêu cầu
+            sorted_final.extend(selected_squad_members + remaining_sorted)
+
+        # Ghi đè lại dataset
+        del dataset[:]
+        for row in sorted_final:
             dataset.append(row.values())
 
     # rules:
@@ -227,7 +257,6 @@ class StudentResource(BaseResource):
 
         # Assign a room to the student if not already done.
         self.assign_student_room(instance)
-        self.assigned_students.append(instance)
 
         # Check if student has been assigned to a room.
         if instance.room_id is not None:
@@ -235,10 +264,13 @@ class StudentResource(BaseResource):
             # This assumes that your Student model has a foreign key 'room', and that Room has a 'building' field.
             building = instance.room.building
 
-            # Append the building value to a list (e.g., self.buildings_list); make sure the list is initialized.
+            # Ensure the list exists
             if not hasattr(self, 'buildings_list'):
                 self.buildings_list = []
-            self.buildings_list.append(building)
+
+            # Append only if not already present
+            if building not in self.buildings_list:
+                self.buildings_list.append(building)
 
             # Save the instance.
             super().save_instance(instance, *args, **kwargs)
@@ -255,188 +287,24 @@ class StudentResource(BaseResource):
             "assign_direct": self.assign_direct,
         }
 
-        unassigned_student = RoomAssignmentCache.get_all()
-        if unassigned_student is not None:
-            self.handle_oversized_student_building(unassigned_student)
-
         self.process_arrange_students(**flags)
 
     def process_arrange_students(self, **flags):
         if flags["assign_direct"] is not True:
-            RoomAssignmentHelper.move_oversize_squad_to_last()
+            BuildingUtils.update_building_under_occupied()
+            # RoomAssignmentHelper.move_oversize_squad_to_last()
             RoomAssignmentHelper.merge_students_before_saving()
-            self.fetch_and_process_students()
             if flags["fill_partial_first"] is not None and flags["fill_empty_first"] is False:
-                print("fill_partial_first is called")
-                RoomAssignmentHelper.assign_overflow_students_globally(selected_building_name=self.selected_buildings)
+                RoomAssignmentHelper.fill_student_to_room_after_merge(selected_building_name=self.selected_buildings)
             else:
-                RoomAssignmentHelper.assign_overflow_students_globally(self.dict_last_room, self.selected_buildings)
+                RoomAssignmentHelper.fill_student_to_room_after_merge(self.dict_last_room, self.selected_buildings)
+            StudentUtils.handle_filling_student_across_building()
+        if len(self.buildings_list) >= 2:
+            # StudentUtils.handle_mixed_squad_with_same_platoon()
+            StudentUtils.fill_empty_rooms_in_dest_from_source()
+            RoomAssignmentHelper.arrange_students_within_building()
+        BuildingUtils.unlock_building_with_empty_room()
         RoomAssignmentHelper.lock_under_occupied_rooms()
-
-    def fetch_and_process_students(self):
-        """
-        Lấy danh sách học sinh từ result_students (dựa vào full_name) và truy vấn lại từ DB.
-        Sau đó xử lý học sinh nếu có overflow building.
-        """
-        # Kết quả cuối cùng chứa các học sinh sau khi xử lý
-        processed_students = []
-
-        # Duyệt qua từng học sinh trong result_students và query từ DB
-        for student in self.assigned_students:
-            try:
-                # Fetch học sinh từ DB dựa vào full_name
-                db_student = Student.objects.get(full_name=student.full_name)
-
-                # Tiến hành xử lý sắp xếp học sinh nếu cần thiết
-                # (Ví dụ: xử lý overflow building, chuyển phòng, v.v.)
-                processed_students.append(db_student)
-
-            except Student.DoesNotExist:
-                print("pass student")
-
-        # Tiến hành sắp xếp lại học sinh (nếu cần)
-        self.arrange_students_overflow(processed_students)
-
-    def arrange_students_overflow(self, students):
-        """
-        Xử lý các học sinh bị overflow, sắp xếp lại vào building chính (nếu cần).
-        """
-        platoon_groups = defaultdict(list)
-
-        # Nhóm học sinh theo platoon
-        for student in students:
-            platoon_groups[student.platoon].append(student)
-
-        for platoon, students in platoon_groups.items():
-            building_groups = defaultdict(list)
-
-            # Nhóm học sinh theo building
-            for student in students:
-                building = student.room.building
-                building_groups[building].append(student)
-
-            # Nếu chỉ có 1 building thì không cần xử lý overflow
-            if len(building_groups) <= 1:
-                continue
-
-            # Xác định building chủ đạo (old building) là building có số lượng học sinh nhiều nhất
-            old_building = self.selected_buildings
-            print(f"Platoon '{platoon}': Old building determined: {old_building}")
-
-            # Xử lý các học sinh bị overflow (các học sinh không thuộc old_building)
-            for building, stu_list in building_groups.items():
-                if building == old_building:
-                    continue
-                for student in stu_list:
-                    target_room = self.find_target_room_for_student(student, old_building)
-                    if target_room:
-                        student.room = target_room
-                        student.save()
-                        print(f"Student moved to room {target_room.id} in building {old_building}")
-
-    def find_target_room_for_student(self, student, old_building):
-        """
-        Tìm phòng trống trong building chính (old_building) có thể chứa học sinh.
-        """
-        available_rooms = (Room.objects.filter(
-            building=old_building,
-            is_temporary_lock=False,
-            is_lock=False
-        ).annotate(student_count=Count("student"))).order_by("floor__floor_number")
-
-        for room in available_rooms:
-            if room.student_count < room.capacity:
-                return room
-        return None
-
-    def handle_oversized_student_building(self, instances):
-        for entry in instances:
-            student = entry["instance"]
-
-            assigned = False
-
-            # Step 1️: Buildings where platoon already has students
-            buildings_with_students = (
-                Room.objects
-                .filter(student__isnull=False, student__platoon=student.platoon)
-                .values_list("building", flat=True)
-                .distinct()
-            )
-
-            existing_buildings = Building.objects.filter(id__in=buildings_with_students)
-
-            # Try existing buildings first
-            for building in existing_buildings:
-                if self._try_assign_to_building(student, building):
-                    assigned = True
-                    break
-
-            # Step 2️: Fallback to gender-priority buildings
-            if not assigned:
-                gender_priority_buildings = RoomAssignmentHelper.get_building_with_gender(student)
-
-                for building in gender_priority_buildings:
-                    if building.id in buildings_with_students:
-                        continue  # Already tried
-                    if self._try_assign_to_building(student, building):
-                        assigned = True
-                        break
-
-        RoomAssignmentCache.clean_assigned_instances()
-
-    def _try_assign_to_building(self, student, building):
-        # Try partially filled room (same platoon + gender, any squad)
-        room = self._find_partial_room_in_same_platoon(student, building)
-        if room:
-            self._assign_and_save(student, room)
-            return True
-
-        # Try an empty room
-        room = self._find_empty_room(student, building)
-        if room:
-            self._assign_and_save(student, room)
-            return True
-
-        return False  # Building full
-
-    def _assign_and_save(self, student, room):
-        student.room = room
-        student.save()
-
-        if Student.objects.filter(room=room).count() >= room.capacity:
-            room.is_lock_to_move = True
-            room.save()
-
-    def _find_partial_room_in_same_platoon(self, student, building):
-        return (
-            Room.objects.filter(
-                building=building,
-                is_lock=False,
-                is_temporary_lock=False,
-                is_lock_to_move=False,
-                student__platoon=student.platoon,
-                student__gender=student.gender,
-            )
-            .annotate(occupancy=Count("student"))
-            .filter(occupancy__lt=F("capacity"))
-            .order_by("floor__floor_number")
-            .distinct()
-            .first()
-        )
-
-    def _find_empty_room(self, student, building):
-        return (
-            Room.objects.filter(
-                building=building,
-                is_lock=False,
-                is_temporary_lock=False,
-                is_lock_to_move=False
-            )
-            .annotate(occupancy=Count("student"))
-            .filter(occupancy=0)
-            .order_by("floor__floor_number")
-            .first()
-        )
 
     def assign_student_room(self, instance):
         """Determine and apply the best strategy for assigning a room."""
