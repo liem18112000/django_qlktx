@@ -1,3 +1,4 @@
+from datetime import datetime
 from io import BytesIO
 
 import openpyxl
@@ -6,7 +7,6 @@ from django.db.models import Sum, Count
 from django.http import JsonResponse, HttpResponse
 from openpyxl.styles import Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
-from datetime import datetime
 
 from backend.models import Floor, Room, Building, Student
 

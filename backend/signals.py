@@ -1,11 +1,9 @@
-from django.contrib.auth.models import Permission
 from django.db import transaction
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
 from backend.helper import RoomAssignmentHelper
-from backend.models import Room, Floor, Building, Student, CustomUser, Platoon
-from backend.permissions_constants import ROLE_MODEL_PERMISSIONS
+from backend.models import Room, Floor, Building, Student
 
 
 @receiver(pre_save, sender=Building)
